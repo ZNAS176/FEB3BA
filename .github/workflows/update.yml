@@ -1,0 +1,51 @@
+name: Actualizar datos y publicar
+
+on:
+  schedule:
+    # Horas en UTC. Fines de semana: tras los partidos (sáb/dom/lun de madrugada) y mediodía.
+    - cron: '30 21 * * 6,0'   # sáb y dom ~23:30 Madrid
+    - cron: '30 23 * * 6,0'   # sáb y dom ~01:30 Madrid
+    - cron: '0 8 * * 0,1,2'   # dom, lun, mar mañana (actas tardías)
+    - cron: '0 7 * * 3'       # miércoles (por si hay partidos aplazados)
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore: ['data.json', 'README.md']
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Descargar actas nuevas
+        run: node scripts/update.mjs
+      - name: Guardar cambios
+        run: |
+          if [ -n "$(git status --porcelain data.json)" ]; then
+            git config user.name "feb3-ba-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add data.json
+            git commit -m "Datos: actualización automática"
+            git push
+          fi
+      - uses: actions/configure-pages@v5
+      - name: Preparar sitio
+        run: |
+          mkdir _site
+          cp -r index.html app.js sw.js manifest.webmanifest data.json icons _site/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - uses: actions/deploy-pages@v4
