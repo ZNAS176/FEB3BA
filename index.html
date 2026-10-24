@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FEB3 BA</title>
+<meta name="theme-color" content="#212121">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FEB3 BA">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cabin:wght@400;500;600;700&family=Roboto:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#1B1F24;--mut:#5B6169;--line:#E6E9ED;--bd:#D5DAE0;--tile:#EEF1F4;--bg:#E3E6EA;--navy:#1F4E78;--red:#DC143C;--org:#FF9C1B;--ven:#FDE8EC}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Cabin,"Gill Sans","Trebuchet MS",sans-serif;font-variant-numeric:tabular-nums}
+body{min-height:100vh;display:flex;justify-content:center}
+#app{width:100%;max-width:560px;min-height:100vh;display:flex;flex-direction:column;background:var(--bg)}
+button{font-family:inherit;cursor:pointer;color:inherit}
+a{color:var(--navy)}a:hover{color:var(--red)}
+h1,h2,h3{margin:0}
+.top{position:sticky;top:0;z-index:5}
+.bar{display:flex;align-items:center;justify-content:space-between;min-height:44px;padding:env(safe-area-inset-top) 16px 0;background:#212121;color:#fff}
+.bar h1{font-family:Roboto,sans-serif;font-weight:900;font-size:20px;letter-spacing:.14em}
+.bar span{font-size:13px;letter-spacing:.06em}
+.hero{display:flex;align-items:center;gap:14px;padding:12px 16px;color:#fff;background-color:#C8102E;background-image:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.35)),linear-gradient(135deg,#FF9C1B 0%,#C8102E 100%)}
+.hero img{width:64px;height:64px;flex-shrink:0;border-radius:6px;background:#fff;object-fit:contain}
+.hero .t1{font-size:22px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;line-height:1.1}
+.hero .t2{font-size:13px;font-style:italic;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-top:4px}
+nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:#fff;border-bottom:1px solid var(--bd)}
+nav button{min-height:48px;background:#fff;border:0;border-bottom:3px solid transparent;color:var(--mut);font-size:15px;font-weight:700;letter-spacing:.04em}
+nav button[aria-current=page]{color:var(--red);border-bottom-color:var(--red)}
+main{padding:14px 16px calc(24px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px}
+.chips{display:flex;gap:6px;overflow-x:auto;margin:0 -16px;padding:0 16px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;min-height:44px;padding:0 14px;border-radius:999px;font-size:14px;font-weight:700;white-space:nowrap;background:#fff;color:var(--ink);border:1px solid #B8C4D0}
+.chip[aria-pressed=true]{background:var(--navy);color:#fff;border-color:var(--navy)}
+.hint{margin:0;font-size:13px;color:var(--mut)}
+.list{display:flex;flex-direction:column;gap:8px}
+.card{display:flex;flex-direction:column;background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden}
+.card.v{background:var(--ven);border-color:var(--red)}
+.card.open{border:2px solid var(--navy)}
+.rowb{display:flex;align-items:center;gap:10px;width:100%;min-height:64px;padding:10px 12px;background:transparent;border:0;text-align:left}
+.rank{width:24px;flex-shrink:0;font-family:Roboto,sans-serif;font-weight:700;font-size:20px;color:var(--mut)}
+.mid{flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.nm{font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub{font-size:13px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.big{display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0}
+.big b{font-family:Roboto,sans-serif;font-weight:900;font-size:28px;line-height:1}
+.big i{font-style:normal;font-size:12px;color:var(--mut)}
+.det{display:flex;flex-direction:column;gap:14px;padding:4px 12px 14px;border-top:1px solid var(--line)}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding-top:12px}
+.tile{display:flex;flex-direction:column;padding:6px 8px;background:var(--tile);border-radius:8px}
+.tile b{font-family:Roboto,sans-serif;font-weight:700;font-size:20px;line-height:1.1}
+.tile i{font-style:normal;font-size:11px;color:var(--mut)}
+.sec{display:flex;flex-direction:column;gap:4px}
+.sec h3{font-family:Roboto,sans-serif;font-weight:700;font-size:17px;text-transform:uppercase;letter-spacing:.08em}
+.sec p{margin:0;font-size:12px;color:var(--mut)}
+.tr{display:grid;grid-template-columns:var(--c);gap:4px;padding:5px 0;border-top:1px solid var(--line);font-size:13px;align-items:center}
+.tr.h{border-top:0;padding:0;font-size:12px;font-weight:700;color:var(--mut)}
+.tr .r{text-align:right}.tr .e{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.tr .b{font-weight:800}
+.trend{display:grid;grid-template-columns:108px minmax(0,1fr) minmax(0,1fr) 36px;align-items:center;gap:0 4px;font-size:12px;padding:3px 0}
+.trend .l{display:flex;justify-content:flex-end;border-right:1px solid #8A94A0}.trend .rr{display:flex}
+.trend em{display:block;height:14px}
+.chipvd{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex-shrink:0;border-radius:8px;font-weight:800;font-size:14px;background:var(--navy);color:#fff}
+.chipvd.d{background:#fff;color:var(--ink);border:2px solid #8A94A0}
+.gl{display:flex;align-items:center;gap:10px;padding:5px 0;border-top:1px solid var(--line);font-size:14px}
+.gl span:nth-child(2){flex-grow:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gl strong{font-family:Roboto,sans-serif;font-size:18px}
+.gm{display:flex;flex-direction:column;gap:6px;width:100%;min-height:64px;padding:10px 12px;background:transparent;border:0;text-align:left}
+.gm small{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+.gm div{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.gm .t{font-size:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gm .s{font-family:Roboto,sans-serif;font-size:26px;line-height:1;font-weight:500}
+.gm .w{font-weight:800}.gm .sw{font-weight:900}
+.more{min-height:44px;background:#fff;border:1px solid var(--navy);border-radius:10px;font-weight:700;font-size:14px;color:var(--navy)}
+.empty{margin:0;padding:14px 16px;background:#fff;border:1px dashed #B8C4D0;border-radius:12px;font-size:14px;color:var(--mut)}
+.row2{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tg{flex-shrink:0;min-height:44px;padding:0 12px;border-radius:10px;font-size:13px;font-weight:700;background:#fff;color:var(--ink);border:1px solid #B8C4D0}
+.tg[aria-pressed=true]{background:var(--navy);color:#fff;border-color:var(--navy)}
+.gd{padding:10px 12px;background:#fff;border:1px solid var(--bd);border-radius:10px;display:flex;flex-direction:column;gap:1px}
+.gd strong{font-size:14px}.gd span{font-size:13px;color:var(--mut);line-height:1.4}
+.gs{display:flex;flex-direction:column;gap:6px}
+.gs h2{font-family:Roboto,sans-serif;font-weight:700;font-size:20px;text-transform:uppercase;letter-spacing:.08em}
+.gs p{margin:0;font-size:14px;line-height:1.45}
+</style>
+</head>
+<body>
+<div id="app">
+<header class="top">
+<div class="bar"><h1>FEB3 BA</h1><span id="head-right"></span></div>
+<div class="hero"><img src="icons/icon-192.png" alt="Logo de la Tercera FEB"><div><div class="t1">Estadísticas</div><div class="t2">Tercera FEB 2026/2027 · Grupo B-A</div></div></div>
+<nav aria-label="Secciones" id="tabs"></nav>
+</header>
+<main id="view"><p class="empty">Cargando datos…</p></main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
