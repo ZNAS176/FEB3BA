@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths-ignore: ['data.json', 'pbp.json', 'README.md']
+    paths-ignore: ['data.json', 'pbp.json', 'shots.json', 'README.md']
 
 permissions:
   contents: write
@@ -33,11 +33,12 @@ jobs:
         run: node scripts/update.mjs
       - name: Guardar cambios
         run: |
-          if [ -n "$(git status --porcelain data.json pbp.json)" ]; then
+          if [ -n "$(git status --porcelain data.json pbp.json shots.json)" ]; then
             git config user.name "feb3-ba-bot"
             git config user.email "actions@users.noreply.github.com"
             git add data.json
             if [ -f pbp.json ]; then git add pbp.json; fi
+            if [ -f shots.json ]; then git add shots.json; fi
             git commit -m "Datos: actualización automática"
             git push
           fi
@@ -47,6 +48,7 @@ jobs:
           mkdir _site
           cp -r index.html app.js sw.js manifest.webmanifest data.json icons _site/
           [ -f pbp.json ] && cp pbp.json _site/ || true
+          [ -f shots.json ] && cp shots.json _site/ || true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

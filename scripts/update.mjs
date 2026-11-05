@@ -2,10 +2,12 @@
 // Node 20+. Sin dependencias. Uso: node scripts/update.mjs
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { buildPbp } from './pbp.mjs';
+import { buildShots } from './shots.mjs';
 
 const FIRST = 2537025, FROM = 2537015, TO = 2537260; // rango de ids a explorar (7 partidos por jornada)
 const FILE = new URL('../data.json', import.meta.url);
 const PBF = new URL('../pbp.json', import.meta.url);
+const SHF = new URL('../shots.json', import.meta.url);
 const UA = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36', 'Accept-Language': 'es-ES,es;q=0.9' };
 
 const old = existsSync(FILE) ? JSON.parse(readFileSync(FILE, 'utf8')) : { games: [] };
@@ -116,4 +118,31 @@ await pool(need, 4, async (id) => {
 if (pbAdded) {
   writeFileSync(PBF, JSON.stringify({ updated: new Date().toISOString(), games: pb.games }));
   console.log(`pbp.json actualizado (+${pbAdded}, ${pbFails} sin datos).`);
+}
+
+// ---- Gráfico de tiro: posiciones de cada tiro (una sola vez por partido terminado) ----
+const sh = existsSync(SHF) ? JSON.parse(readFileSync(SHF, 'utf8')) : { games: {} };
+const needS = games.map((g) => g.i).filter((id) => !sh.games[id]);
+console.log(`Gráfico de tiro pendiente: ${needS.length} partidos`);
+let shAdded = 0, shFails = 0;
+await pool(needS, 4, async (id) => {
+  for (let tryN = 0; tryN < 2; tryN++) {
+    try {
+      let j;
+      try { j = await api(id, tk, 'ShotChart'); } catch (e) { if (/401|403/.test(e.message) && tryN === 0) { tk = null; await ensure(); continue; } throw e; }
+      const rows = j && buildShots(j);
+      if (!rows) { shFails++; console.warn(`Sin gráfico de tiro utilizable: ${id}`); return; }
+      const g = have.get(id);
+      if (g) {
+        const fga = [0, 1].map((t) => rows.filter((r) => r[0] === t).length);
+        const box = [g.h.t[3] + g.h.t[5], g.a.t[3] + g.a.t[5]];
+        if (fga[0] !== box[0] || fga[1] !== box[1]) console.warn(`Aviso ${id}: tiros ${fga} vs acta ${box}`);
+      }
+      sh.games[id] = rows; shAdded++; return;
+    } catch (e) { if (tryN === 1) { shFails++; console.warn(e.message); } }
+  }
+});
+if (shAdded) {
+  writeFileSync(SHF, JSON.stringify({ updated: new Date().toISOString(), games: sh.games }));
+  console.log(`shots.json actualizado (+${shAdded}, ${shFails} sin datos).`);
 }

@@ -245,8 +245,8 @@ const GUIDE_PLAYER = [
 ];
 
 /* ---------- vista ---------- */
-const S = { qSel: null, tab: 'eq', eqSort: 'anet', eqSel: null, juSort: 'val', juTeam: 'all', juMin: true, juSel: null, juLim: 25, paSel: null };
-let DATA = null, C = null;
+const S = { paJ: null, shQ: 0, qSel: null, tab: 'eq', eqSort: 'anet', eqSel: null, juSort: 'val', juTeam: 'all', juMin: true, juSel: null, juLim: 25, paSel: null };
+let DATA = null, C = null, SH = {};
 
 const chip = (act, val, label, on) => `<button type="button" class="chip" data-a="${act}" data-v="${esc(val)}" aria-pressed="${on}">${esc(label)}</button>`;
 const tbl = (cols, cells, cls) => `<div class="tr ${cls || ''}" style="--c:${cols}">${cells}</div>`;
@@ -341,8 +341,11 @@ function playerDetail(p) {
 }
 
 function viewPa() {
-  const gs = C.games.slice().sort((a, b) => b.i - a.i);
-  let h = '<div class="list">';
+  const js = [...new Set(C.games.map((g) => g.j))].sort((a, b) => b - a);
+  const cur = js.includes(S.paJ) ? S.paJ : js[0];
+  const gs = C.games.filter((g) => g.j === cur).sort((a, b) => a.i - b.i);
+  let h = `<div class="chips" role="group" aria-label="Jornada">${js.map((j) => chip('paJ', j, 'J' + j, j === cur)).join('')}</div>`;
+  h += '<div class="list">';
   gs.forEach((g) => {
     const open = S.paSel === g.i, [hh, aa] = g.sides, hw = hh.pts > aa.pts, d = g.d.split('-');
     h += `<div class="card ${open ? 'open' : ''}"><button type="button" class="gm" data-a="paSel" data-v="${g.i}" aria-expanded="${open}">
@@ -353,6 +356,39 @@ function viewPa() {
     h += '</div>';
   });
   return h + '</div>';
+}
+
+
+function courtLines() {
+  const l = 'fill="none" stroke="#8A94A0" stroke-width=".8"';
+  return `<rect x=".5" y=".5" width="149" height="139" ${l}/>
+    <rect x="50.5" y=".5" width="49" height="57.5" ${l}/>
+    <path d="M57 58A18 18 0 0 0 93 58" ${l}/><path d="M57 58A18 18 0 0 1 93 58" ${l} stroke-dasharray="3 3"/>
+    <path d="M62.5 15.75A12.5 12.5 0 0 0 87.5 15.75" ${l}/>
+    <path d="M66 12H84" stroke="#8A94A0" stroke-width="1.4"/><circle cx="75" cy="15.75" r="2.25" ${l}/>
+    <path d="M9 .5V29.9A67.5 67.5 0 0 0 141 29.9V.5" ${l}/>
+    <path d="M57 140A18 18 0 0 1 93 140" ${l}/>`;
+}
+function shotSection(g) {
+  const rows = SH[g.i];
+  const head = '<h3>Gráfico de tiro</h3>';
+  if (!rows) return `<div class="sec">${head}<p>El gráfico de tiro de este partido se publicará tras la próxima actualización automática.</p></div>`;
+  const q = S.shQ, qs = [[0, 'Todos'], [1, '1º'], [2, '2º'], [3, '3º'], [4, '4º']];
+  const chips = `<div class="chips" style="margin:0;padding:0" role="group" aria-label="Cuarto">${qs.map(([v, l]) => chip('shQ', v, l, v === q)).join('')}</div>`;
+  const court = (t) => {
+    const sel = rows.filter((r) => r[0] === t && (q === 0 || r[2] === q));
+    const made = sel.filter((r) => r[5]).length, side = g.sides[t];
+    const who = (no) => { const p = side.pl.find((x) => String(x[1]) === String(no)); return p ? '#' + no + ' ' + norm(p[0]) : '#' + no; };
+    const pts = sel.slice().sort((a, b) => a[5] - b[5]).map((r) => {
+      const cx = (r[4] * 1.5).toFixed(1), cy = (Math.min(r[3], 50) * 2.8).toFixed(1), tt = `<title>${esc(who(r[1]))} · ${r[5] ? 'anotado' : 'fallado'} · ${r[2]}º cuarto</title>`;
+      return r[5] ? `<circle cx="${cx}" cy="${cy}" r="2.7" fill="#1F4E78" stroke="#fff" stroke-width=".7">${tt}</circle>`
+        : `<path d="M${cx - 2} ${cy - 2}l4 4m0-4l-4 4" stroke="#E07B00" stroke-width="1.5" stroke-linecap="round" fill="none">${tt}</path>`;
+    }).join('');
+    return `<div class="sec"><h3 style="font-size:15px">${esc(sh(side.name))}</h3>
+      <p>${made}/${sel.length} tiros de campo${sel.length ? ' · ' + pct(100 * made / sel.length) : ''}</p>
+      <svg class="court" viewBox="0 0 150 140" role="img" aria-label="Tiros de ${esc(sh(side.name))}: ${made} anotados de ${sel.length}">${courtLines()}${pts}</svg></div>`;
+  };
+  return `<div class="sec">${head}<p>● anotado · ✕ fallado. Todos los tiros se dibujan hacia el mismo aro; la línea de triple es la de la pista FIBA.</p>${chips}</div>${court(0)}${court(1)}`;
 }
 
 function gameDetail(g) {
@@ -380,7 +416,7 @@ function gameDetail(g) {
     ${tbl(qc, cell('Cuartos') + cell('1', 'r') + cell('2', 'r') + cell('3', 'r') + cell('4', 'r') + cell(ot ? 'Pr.' : '', 'r'), 'h')}
     ${tbl(qc, cell(sh(hh.name), 'e') + qs(0).map((x) => cell(x, 'r')).join(''))}${tbl(qc, cell(sh(aa.name), 'e') + qs(1).map((x) => cell(x, 'r')).join(''))}
     <div class="sec"><h3>Claves del partido</h3>${tbl('64px minmax(0,1fr) 64px', cell(sh(hh.name)) + cell('') + cell(sh(aa.name), 'r'), 'h')}${keys}</div>
-    ${box(hh)}${box(aa)}<a href="https://baloncestoenvivo.feb.es/partido/${g.i}" style="font-size:14px;font-weight:600">Acta completa en la FEB</a></div>`;
+    ${shotSection(g)}${box(hh)}${box(aa)}<a href="https://baloncestoenvivo.feb.es/partido/${g.i}" style="font-size:14px;font-weight:600">Acta completa en la FEB</a></div>`;
 }
 
 
@@ -504,6 +540,8 @@ document.addEventListener('click', (e) => {
   else if (a === 'juSel') S.juSel = S.juSel === v ? null : v;
   else if (a === 'more') S.juLim += 25;
   else if (a === 'qSel') S.qSel = S.qSel === v ? null : v;
+  else if (a === 'paJ') { S.paJ = Number(v); S.paSel = null; }
+  else if (a === 'shQ') S.shQ = Number(v);
   else if (a === 'paSel') S.paSel = S.paSel === Number(v) ? null : Number(v);
   render();
   if (a !== 'tab') window.scrollTo(0, y);
@@ -511,7 +549,8 @@ document.addEventListener('click', (e) => {
 
 fetch('data.json', { cache: 'no-cache' }).then((r) => r.json()).then((d) => fetch('pbp.json', { cache: 'no-cache' })
   .then((r) => (r.ok ? r.json() : { games: {} })).catch(() => ({ games: {} }))
-  .then((pb) => { DATA = d; C = compute(d.games); addPbp(C, pb); render(); })).catch(() => {
+  .then((pb) => fetch('shots.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : { games: {} })).catch(() => ({ games: {} }))
+    .then((sj) => { SH = sj.games || {}; DATA = d; C = compute(d.games); addPbp(C, pb); render(); }))).catch(() => {
   document.getElementById('view').innerHTML = '<p class="empty">No se han podido cargar los datos. Comprueba la conexión e inténtalo de nuevo.</p>';
 });
 
