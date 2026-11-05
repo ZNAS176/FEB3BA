@@ -245,7 +245,7 @@ const GUIDE_PLAYER = [
 ];
 
 /* ---------- vista ---------- */
-const S = { paJ: null, shQ: 0, qSel: null, tab: 'eq', eqSort: 'anet', eqSel: null, juSort: 'val', juTeam: 'all', juMin: true, juSel: null, juLim: 25, paSel: null };
+const S = { reT: VEN, paJ: null, shQ: 0, qSel: null, tab: 'eq', eqSort: 'anet', eqSel: null, juSort: 'val', juTeam: 'all', juMin: true, juSel: null, juLim: 25, paSel: null };
 let DATA = null, C = null, SH = {};
 
 const chip = (act, val, label, on) => `<button type="button" class="chip" data-a="${act}" data-v="${esc(val)}" aria-pressed="${on}">${esc(label)}</button>`;
@@ -290,7 +290,7 @@ function teamDetail(t) {
   const fac = (l, mine, theirs, f, hi) => { const w = better(mine, theirs, hi); return tbl('minmax(0,1fr) 64px 64px', cell(l) + cell(f(mine), 'r ' + (w ? 'b' : '')) + cell(f(theirs), 'r ' + (w ? '' : 'b'))); };
   const top = Object.values(C.P).filter((p) => p.teamFull === t.name).sort((a, b) => b.val_g - a.val_g).slice(0, 5);
   const cols = 'minmax(0,1fr) 38px 38px 38px 40px';
-  return `<div class="det"><div class="tiles">${tiles.map(([l, v]) => tile(l, v)).join('')}</div>
+  return `<div class="det g2"><div class="tiles">${tiles.map(([l, v]) => tile(l, v)).join('')}</div>
     <div class="sec"><h3>Tendencia</h3><p>Diferencia neta en cada partido (por 100 posesiones). Azul: mejor que el rival; naranja: peor.</p>${trend}</div>
     <div class="sec"><h3>Cuatro factores</h3>${tbl('minmax(0,1fr) 64px 64px', cell('') + cell('Equipo', 'r') + cell('Rivales', 'r'), 'h')}
       ${fac('Acierto de tiro (eFG%)', t.efg, t.oefg, pct, true)}${fac('Pérdidas por posesión', t.tov, t.otov, pct, false)}${fac('Rebote ofensivo', t.orb, t.oorb, pct, true)}${fac('Tiros libres por tiro de campo', t.ftr, t.oftr, pct, true)}</div>
@@ -369,26 +369,30 @@ function courtLines() {
     <path d="M9 .5V29.9A67.5 67.5 0 0 0 141 29.9V.5" ${l}/>
     <path d="M57 140A18 18 0 0 1 93 140" ${l}/>`;
 }
+function courtSvg(sel, label, who) {
+  const made = sel.filter((r) => r[5]).length;
+  const pts = sel.slice().sort((a, b) => a[5] - b[5]).map((r) => {
+    const cx = (r[4] * 1.5).toFixed(1), cy = (Math.min(r[3], 50) * 2.8).toFixed(1);
+    const tt = who ? `<title>${esc(who(r))} · ${r[5] ? 'anotado' : 'fallado'}</title>` : '';
+    return r[5] ? `<circle cx="${cx}" cy="${cy}" r="2.7" fill="#1F4E78" stroke="#fff" stroke-width=".7">${tt}</circle>`
+      : `<path d="M${cx - 2} ${cy - 2}l4 4m0-4l-4 4" stroke="#E07B00" stroke-width="1.5" stroke-linecap="round" fill="none">${tt}</path>`;
+  }).join('');
+  return `<svg class="court" viewBox="0 0 150 140" role="img" aria-label="${esc(label)}: ${made} anotados de ${sel.length}">${courtLines()}${pts}</svg>`;
+}
 function shotSection(g) {
   const rows = SH[g.i];
   const head = '<h3>Gráfico de tiro</h3>';
-  if (!rows) return `<div class="sec">${head}<p>El gráfico de tiro de este partido se publicará tras la próxima actualización automática.</p></div>`;
+  if (!rows) return `<div class="sec wide">${head}<p>El gráfico de tiro de este partido se publicará tras la próxima actualización automática.</p></div>`;
   const q = S.shQ, qs = [[0, 'Todos'], [1, '1º'], [2, '2º'], [3, '3º'], [4, '4º']];
   const chips = `<div class="chips" style="margin:0;padding:0" role="group" aria-label="Cuarto">${qs.map(([v, l]) => chip('shQ', v, l, v === q)).join('')}</div>`;
   const court = (t) => {
     const sel = rows.filter((r) => r[0] === t && (q === 0 || r[2] === q));
     const made = sel.filter((r) => r[5]).length, side = g.sides[t];
-    const who = (no) => { const p = side.pl.find((x) => String(x[1]) === String(no)); return p ? '#' + no + ' ' + norm(p[0]) : '#' + no; };
-    const pts = sel.slice().sort((a, b) => a[5] - b[5]).map((r) => {
-      const cx = (r[4] * 1.5).toFixed(1), cy = (Math.min(r[3], 50) * 2.8).toFixed(1), tt = `<title>${esc(who(r[1]))} · ${r[5] ? 'anotado' : 'fallado'} · ${r[2]}º cuarto</title>`;
-      return r[5] ? `<circle cx="${cx}" cy="${cy}" r="2.7" fill="#1F4E78" stroke="#fff" stroke-width=".7">${tt}</circle>`
-        : `<path d="M${cx - 2} ${cy - 2}l4 4m0-4l-4 4" stroke="#E07B00" stroke-width="1.5" stroke-linecap="round" fill="none">${tt}</path>`;
-    }).join('');
+    const who = (r) => { const p = side.pl.find((x) => String(x[1]) === String(r[1])); return (p ? '#' + r[1] + ' ' + norm(p[0]) : '#' + r[1]) + ' · ' + r[2] + 'º cuarto'; };
     return `<div class="sec"><h3 style="font-size:15px">${esc(sh(side.name))}</h3>
-      <p>${made}/${sel.length} tiros de campo${sel.length ? ' · ' + pct(100 * made / sel.length) : ''}</p>
-      <svg class="court" viewBox="0 0 150 140" role="img" aria-label="Tiros de ${esc(sh(side.name))}: ${made} anotados de ${sel.length}">${courtLines()}${pts}</svg></div>`;
+      <p>${made}/${sel.length} tiros de campo${sel.length ? ' · ' + pct(100 * made / sel.length) : ''}</p>${courtSvg(sel, 'Tiros de ' + sh(side.name), who)}</div>`;
   };
-  return `<div class="sec">${head}<p>● anotado · ✕ fallado. Todos los tiros se dibujan hacia el mismo aro; la línea de triple es la de la pista FIBA.</p>${chips}</div>${court(0)}${court(1)}`;
+  return `<div class="sec wide">${head}<p>● anotado · ✕ fallado. Todos los tiros se dibujan hacia el mismo aro; la línea de triple es la de la pista FIBA.</p>${chips}<div class="courts">${court(0)}${court(1)}</div></div>`;
 }
 
 function gameDetail(g) {
@@ -412,11 +416,11 @@ function gameDetail(g) {
   const pc = 'minmax(0,1fr) 38px 30px 30px 30px 34px 34px';
   const box = (s) => `<div class="sec"><h3>${esc(sh(s.name))}</h3>${tbl(pc, cell('') + ['MIN', 'PT', 'RB', 'AS', 'VA', '+/-'].map((x) => cell(x, 'r')).join(''), 'h')}
     ${s.pl.slice().sort((x, y) => y[3] - x[3] || y[2] - x[2]).map((p) => tbl(pc, cell(norm(p[0]), 'e') + cell(mmss(p[2]), 'r') + cell(p[3], 'r b') + cell(p[10] + p[11], 'r') + cell(p[12], 'r') + cell(p[18], 'r') + cell(p[19] > 0 ? '+' + p[19] : p[19], 'r'))).join('')}</div>`;
-  return `<div class="det" style="padding-top:10px">
-    ${tbl(qc, cell('Cuartos') + cell('1', 'r') + cell('2', 'r') + cell('3', 'r') + cell('4', 'r') + cell(ot ? 'Pr.' : '', 'r'), 'h')}
-    ${tbl(qc, cell(sh(hh.name), 'e') + qs(0).map((x) => cell(x, 'r')).join(''))}${tbl(qc, cell(sh(aa.name), 'e') + qs(1).map((x) => cell(x, 'r')).join(''))}
+  return `<div class="det g2" style="padding-top:10px">
+    <div class="sec">${tbl(qc, cell('Cuartos') + cell('1', 'r') + cell('2', 'r') + cell('3', 'r') + cell('4', 'r') + cell(ot ? 'Pr.' : '', 'r'), 'h')}
+    ${tbl(qc, cell(sh(hh.name), 'e') + qs(0).map((x) => cell(x, 'r')).join(''))}${tbl(qc, cell(sh(aa.name), 'e') + qs(1).map((x) => cell(x, 'r')).join(''))}</div>
     <div class="sec"><h3>Claves del partido</h3>${tbl('64px minmax(0,1fr) 64px', cell(sh(hh.name)) + cell('') + cell(sh(aa.name), 'r'), 'h')}${keys}</div>
-    ${shotSection(g)}${box(hh)}${box(aa)}<a href="https://baloncestoenvivo.feb.es/partido/${g.i}" style="font-size:14px;font-weight:600">Acta completa en la FEB</a></div>`;
+    ${shotSection(g)}${box(hh)}${box(aa)}<a class="wide" href="https://baloncestoenvivo.feb.es/partido/${g.i}" style="font-size:14px;font-weight:600">Acta completa en la FEB</a></div>`;
 }
 
 
@@ -440,36 +444,45 @@ function viewQ() {
   h += '<div class="list">';
   teams.forEach((t) => {
     if (S.qSel !== t.name) return;
-    h += `<div class="card open ${t.name === VEN ? 'v' : ''}"><div class="det" style="border:0;padding-top:12px"><h3 style="font-family:Roboto,sans-serif;font-size:18px">${esc(t.short)}</h3>${qDetail(t)}</div></div>`;
+    h += `<div class="card open ${t.name === VEN ? 'v' : ''}"><div class="det g2" style="border:0;padding-top:12px"><h3 class="wide" style="font-family:Roboto,sans-serif;font-size:18px">${esc(t.short)}</h3>${qDetail(t)}</div></div>`;
   });
   return h + '</div>';
 }
 
 
-function pbpSection(t) {
-  if (!C.pbpN || !t.pg) return '<p class="hint">El jugada a jugada todavía no está descargado para este equipo. Aparecerá tras la próxima actualización automática.</p>';
+function pbpCalc(t) {
   const ng = t.pg, d10 = (pf, pa, sec) => (sec > 0 ? 10 * (pf - pa) / (sec / 60) : NaN);
   const tot = (p) => p.pq.reduce((x, q) => x + q.sec, 0);
   const pl = Object.values(C.P).filter((p) => p.teamFull === t.name && tot(p) > 0).sort((a, b) => tot(b) - tot(a)).slice(0, 9);
-  const mc = 'minmax(0,1fr) repeat(4,40px)';
   const wq = t.qworst;
   const cand = pl.map((p) => {
     const q = p.pq[wq], tq = t.pq[wq];
     const on = d10(q.pf, q.pa, q.sec), off = d10(tq.pf - q.pf, tq.pa - q.pa, tq.sec - q.sec);
     return { p, on, off, gap: on - off, mins: q.sec / ng / 60 };
   }).filter((c) => c.mins >= 2.5 && isFinite(c.gap)).sort((a, b) => b.gap - a.gap);
-  let txt = `Datos de ${ng} ${ng === 1 ? 'partido' : 'partidos'} con jugada a jugada. `;
-  if (cand.length >= 3) {
-    const best = cand.slice(0, 2), worst = cand[cand.length - 1];
-    const f = (c) => `${c.p.n} (${sgn(c.on, 0)} con él en pista, ${sgn(c.off, 0)} sin él)`;
-    txt += `En el ${ord(wq)} cuarto, su periodo más flojo, el equipo rinde mejor con ${best.map(f).join(' y ')}, y peor con ${f(worst)}. Cifras por cada 10 minutos de juego.`;
+  return { ng, d10, pl, wq, cand };
+}
+function pbpTxt(t, c) {
+  let txt = `Datos de ${c.ng} ${c.ng === 1 ? 'partido' : 'partidos'} con jugada a jugada. `;
+  if (c.cand.length >= 3) {
+    const best = c.cand.slice(0, 2), worst = c.cand[c.cand.length - 1];
+    const f = (x) => `${x.p.n} (${sgn(x.on, 0)} con él en pista, ${sgn(x.off, 0)} sin él)`;
+    txt += `En el ${ord(c.wq)} cuarto, su periodo más flojo, el equipo rinde mejor con ${best.map(f).join(' y ')}, y peor con ${f(worst)}. Cifras por cada 10 minutos de juego.`;
   } else txt += 'Todavía hay pocos datos para comparar jugadores en su cuarto más flojo.';
+  return txt;
+}
+
+function pbpSection(t) {
+  if (!C.pbpN || !t.pg) return '<p class="hint">El jugada a jugada todavía no está descargado para este equipo. Aparecerá tras la próxima actualización automática.</p>';
+  const c0 = pbpCalc(t), ng = c0.ng, d10 = c0.d10, pl = c0.pl, wq = c0.wq;
+  const mc = 'minmax(0,1fr) repeat(4,40px)';
+  let txt = pbpTxt(t, c0);
   txt += ' Es una correlación, no una causa: un jugador que comparte pista con los titulares, o con los suplentes rivales, parece mejor de lo que es.';
   const head = (l) => tbl(mc, cell(l) + [1, 2, 3, 4].map((i) => cell(i + 'º', 'r')).join(''), 'h');
   const minRows = pl.map((p) => tbl(mc, cell(p.n, 'e') + p.pq.map((q) => cell(fmt(q.sec / ng / 60), 'r')).join(''))).join('');
   const dRows = pl.map((p) => tbl(mc, cell(p.n, 'e') + p.pq.map((q) => (q.sec >= 60 * ng ? qcell(d10(q.pf, q.pa, q.sec), 0) : cell('—', 'r'))).join(''))).join('');
   const teamRow = tbl(mc, cell('Equipo', 'e b') + t.pq.map((q) => qcell(d10(q.pf, q.pa, q.sec), 0)).join(''));
-  return `<div class="sec"><h3>¿Influye quién está en pista?</h3><p>${esc(txt)}</p></div>
+  return `<div class="sec wide"><h3>¿Influye quién está en pista?</h3><p>${esc(txt)}</p></div>
     <div class="sec"><h3>Minutos por partido en cada cuarto</h3>${head('')}${minRows}</div>
     <div class="sec"><h3>Dif. del equipo con él en pista (por 10 min)</h3>${head('')}${teamRow}${dRows}<p>Se muestra solo si el jugador ha sumado al menos un minuto por partido en ese cuarto.</p></div>`;
 }
@@ -489,13 +502,145 @@ function qDetail(t) {
     ['Cuartos perdidos', t.q.map((q) => q.lost + '/' + n), false]
   ];
   const gcols = 'minmax(0,1fr) repeat(4,38px)';
-  return `<p class="hint">${esc(txt)}</p>
+  return `<p class="hint wide">${esc(txt)}</p>
     <div class="sec">${tbl(cols, cell('') + [1, 2, 3, 4].map((i) => cell(i + 'º', 'r')).join(''), 'h')}
     ${rows.map(([l, vs, c]) => tbl(cols, cell(l) + vs.map((v, i) => c ? `<span class="r qc" style="${qcol(l === 'Diferencia' ? t.q[i].d : t.q[i].bias)}">${esc(v)}</span>` : cell(v, 'r')).join(''))).join('')}</div>
     <div class="sec"><h3>1ª parte vs 2ª parte</h3>${tbl('minmax(0,1fr) 70px 70px', cell('') + cell('1ª parte', 'r') + cell('2ª parte', 'r'), 'h')}${tbl('minmax(0,1fr) 70px 70px', cell('Diferencia por partido') + qcell(t.qh1) + qcell(t.qh2))}</div>
     <div class="sec"><h3>Partido a partido</h3>${tbl(gcols, cell('') + [1, 2, 3, 4].map((i) => cell(i + 'º', 'r')).join(''), 'h')}
     ${t.qg.map((g) => tbl(gcols, cell('J' + g.j + ' ' + (g.home ? 'vs' : 'en') + ' ' + g.rival, 'e') + g.d.map((v) => qcell(v, 0)).join(''))).join('')}</div>
     ${pbpSection(t)}`;
+}
+
+/* ---------- informe de equipo ---------- */
+const RM = [
+  { id: 'ao', l: 'Ataque ajustado', get: (t) => t.ao, hi: true, f: (x) => fmt(x), s: 'Ataque muy eficiente', w: 'Ataque poco eficiente', ts: 'Su ataque es de los mejores del grupo: hay que defender bien cada posesión.', tw: 'Le cuesta anotar: cualquier defensa ordenada le incomoda.' },
+  { id: 'ad', l: 'Defensa ajustada', get: (t) => t.ad, hi: false, f: (x) => fmt(x), s: 'Defensa sólida', w: 'Defensa frágil', ts: 'Defiende muy bien: conviene tener paciencia y buscar buenos tiros.', tw: 'Su defensa concede mucho: merece la pena atacar rápido y con intención.' },
+  { id: 'pace', l: 'Ritmo (pos./40 min)', get: (t) => t.pace, hi: true, f: (x) => fmt(x), neutral: true },
+  { id: 'efg', l: 'eFG% (acierto)', get: (t) => t.efg, hi: true, f: pct, s: 'Mucho acierto de tiro', w: 'Poco acierto de tiro', ts: 'Tira con mucho acierto: hay que obligarle a tiros difíciles.', tw: '' },
+  { id: 'oefg', l: 'eFG% que permite', get: (t) => t.oefg, hi: false, f: pct, s: 'Obliga a los rivales a tirar mal', w: 'Permite mucho acierto a los rivales', ts: '', tw: 'Concede tiros cómodos: los rivales anotan con facilidad contra él.' },
+  { id: 'tov', l: 'Pérdidas (% pos.)', get: (t) => t.tov, hi: false, f: pct, s: 'Cuida el balón', w: 'Pierde muchos balones', ts: 'Pierde pocos balones: ganar el partido por robos será difícil.', tw: 'Pierde muchos balones: presionar la salida de balón puede dar frutos.' },
+  { id: 'otov', l: 'Pérdidas que provoca', get: (t) => t.otov, hi: true, f: pct, s: 'Provoca muchas pérdidas rivales', w: 'Provoca pocas pérdidas rivales', ts: 'Provoca muchas pérdidas: hay que cuidar el balón y la circulación.', tw: '' },
+  { id: 'orb', l: 'Rebote ofensivo', get: (t) => t.orb, hi: true, f: pct, s: 'Fuerte en rebote ofensivo', w: 'Flojo en rebote ofensivo', ts: 'Captura muchos rebotes de ataque: cerrar bien el rebote defensivo.', tw: '' },
+  { id: 'drb', l: 'Rebote defensivo', get: (t) => t.drb, hi: true, f: pct, s: 'Fuerte en rebote defensivo', w: 'Flojo en rebote defensivo', ts: 'Casi no regala segundas oportunidades.', tw: 'Regala rebotes de ataque: merece la pena cargar el rebote ofensivo.' },
+  { id: 'ftr', l: 'Libres / tiro campo', get: (t) => t.ftr, hi: true, f: pct, s: 'Llega mucho a la línea de libres', w: 'Llega poco a la línea de libres', ts: 'Provoca muchas faltas: evitar faltas innecesarias.', tw: '' },
+  { id: 'oftr', l: 'Libres que concede', get: (t) => t.oftr, hi: false, f: pct, s: 'Concede pocos libres', w: 'Concede muchos libres', ts: '', tw: 'Concede muchas faltas: atacar el aro puede llevar a los rivales a la línea.' },
+  { id: 'p3', l: 'Triples %', get: (t) => t.p3, hi: true, f: pct, s: 'Acierta de tres', w: 'Falla de tres', ts: 'Tira muy bien de tres: cerrar el perímetro.', tw: 'Falla de tres: se le puede dar espacio fuera.' },
+  { id: 'p2', l: 'Tiros de 2 %', get: (t) => t.p2, hi: true, f: pct, s: 'Acierta de dos', w: 'Falla de dos', ts: '', tw: '' },
+  { id: 'ft', l: 'Tiros libres %', get: (t) => t.ft, hi: true, f: pct, s: 'Buen tirador de libres', w: 'Flojo en libres', ts: '', tw: 'Flojo en libres: se puede apretar al final de los partidos.' },
+  { id: 'astto', l: 'Asist. / pérdida', get: (t) => t.astto, hi: true, f: (x) => fmt(x, 2), s: 'Mucho juego colectivo', w: 'Poco juego colectivo', ts: '', tw: '' }
+];
+const rankOf = (t, m) => Object.values(C.T).slice().sort((a, b) => (m.hi ? m.get(b) - m.get(a) : m.get(a) - m.get(b))).findIndex((x) => x.name === t.name) + 1;
+const zoneOf = (r) => { const d = Math.hypot(Math.min(r[3], 50) * 0.28 - 1.575, (r[4] - 50) * 0.15); return d < 2 ? 0 : d >= 6.4 ? 2 : 1; };
+const ZN = ['Cerca del aro', 'Media distancia', 'Triples'];
+
+function zonesFor(t) {
+  const z = () => [0, 1, 2].map(() => ({ a: 0, m: 0 }));
+  const own = z(), opp = z(), lg = z(), rowsOwn = [], rowsOpp = [];
+  let n = 0;
+  C.games.forEach((g) => {
+    const rows = SH[g.i];
+    if (!rows) return;
+    rows.forEach((r) => { const k = zoneOf(r); lg[k].a += 1; lg[k].m += r[5]; });
+    const s = g.sides.findIndex((x) => x.name === t.name);
+    if (s < 0) return;
+    n += 1;
+    rows.forEach((r) => {
+      const k = zoneOf(r), tgt = r[0] === s ? own : opp;
+      tgt[k].a += 1; tgt[k].m += r[5];
+      (r[0] === s ? rowsOwn : rowsOpp).push(r);
+    });
+  });
+  return { own, opp, lg, rowsOwn, rowsOpp, n };
+}
+
+function viewRe() {
+  const N = Object.keys(C.T).length;
+  const teams = Object.values(C.T).sort((a, b) => (a.name === VEN ? -1 : b.name === VEN ? 1 : a.short.localeCompare(b.short, 'es')));
+  const t = C.T[S.reT] || C.T[VEN] || teams[0];
+  const all = Object.values(C.T);
+  const rk = RM.map((m) => ({ m, v: m.get(t), r: rankOf(t, m), avg: all.reduce((x, y) => x + m.get(y), 0) / N }));
+  const rA = rankOf(t, { get: (x) => x.anet, hi: true });
+  const strong = rk.filter((x) => !x.m.neutral && x.r <= 3).sort((a, b) => a.r - b.r).slice(0, 5);
+  const weak = rk.filter((x) => !x.m.neutral && x.r >= N - 2).sort((a, b) => b.r - a.r).slice(0, 5);
+  const pace = rk.find((x) => x.m.id === 'pace');
+  const paceWord = pace.r <= Math.ceil(N / 4) ? 'alto' : pace.r > N - Math.ceil(N / 4) ? 'bajo' : 'medio';
+  const li = (x, k) => `<li><b>${esc(x.m[k])}</b> · ${esc(x.m.f(x.v))} <span class="rk">(puesto ${x.r} de ${N})</span></li>`;
+
+  // resumen
+  const resumen = `${t.short} suma ${t.w} ${t.w === 1 ? 'victoria' : 'victorias'} y ${t.l} ${t.l === 1 ? 'derrota' : 'derrotas'} en ${t.gp} partidos (${fmt(t.ppg)} puntos a favor y ${fmt(t.papg)} en contra por partido). Ocupa el puesto ${rA} de ${N} en diferencia neta ajustada por rival (${sgn(t.anet)} por 100 posesiones), con un ataque ajustado de ${fmt(t.ao)} (puesto ${rk[0].r}) y una defensa ajustada de ${fmt(t.ad)} (puesto ${rk[1].r}). Juega a ritmo ${paceWord}: ${fmt(t.pace)} posesiones por 40 minutos (puesto ${pace.r}). Sus rivales han tenido una fuerza media de ${sgn(t.sos)}.`;
+
+  // forma reciente
+  const last = t.games.slice().sort((a, b) => a.j - b.j).slice(-3);
+  const lnet = last.reduce((x, g) => x + g.ort - g.drt, 0) / last.length;
+  const lw = last.filter((g) => g.win).length;
+  const trendWord = t.gp < 4 ? '' : lnet - t.net >= 5 ? ' Llega en alza.' : lnet - t.net <= -5 ? ' Llega a la baja.' : ' Se mantiene estable.';
+  const forma = `Últimos ${last.length} partidos: ${lw} ${lw === 1 ? 'victoria' : 'victorias'} y ${last.length - lw} ${last.length - lw === 1 ? 'derrota' : 'derrotas'}, con una diferencia neta de ${sgn(lnet)} por 100 posesiones (en toda la temporada, ${sgn(t.net)}).${trendWord}`;
+
+  // cuartos
+  const wq = t.q[t.qworst], bq = t.q[t.qbest];
+  const clear = (q) => Math.abs(q.bias) >= 2 * Math.max(q.se, 1.5);
+  const cuartos = `Su cuarto más fuerte es el ${ord(t.qbest)} (${sgn(bq.d)} por partido) y el más flojo el ${ord(t.qworst)} (${sgn(wq.d)}). En la primera parte la diferencia media es ${sgn(t.qh1)} y en la segunda ${sgn(t.qh2)}. ` + (clear(wq) || clear(bq) ? 'La diferencia con su propia media es notable.' : 'Con los partidos disputados todavía puede ser casualidad.');
+  const pc = C.pbpN && t.pg ? pbpCalc(t) : null;
+  const enPista = pc ? pbpTxt(t, pc) + ' Es una correlación, no una causa.' : '';
+
+  // jugadores
+  const pl = Object.values(C.P).filter((p) => p.teamFull === t.name);
+  const top = pl.slice().sort((a, b) => b.val_g - a.val_g).slice(0, 6);
+  const byPts = pl.slice().sort((a, b) => b.pts - a.pts);
+  const share = t.m.pts ? 100 * (byPts[0].pts + (byPts[1] ? byPts[1].pts : 0)) / t.m.pts : NaN;
+  const secs = pl.reduce((x, p) => x + p.sec, 0), top5 = pl.slice().sort((a, b) => b.sec - a.sec).slice(0, 5).reduce((x, p) => x + p.sec, 0);
+  const rot = pl.filter((p) => p.mpg >= 10).length;
+  const jug = `${byPts[0].n} y ${byPts[1] ? byPts[1].n : '—'} anotan el ${pct(share)} de los puntos del equipo. Los cinco jugadores que más juegan suman el ${pct(100 * top5 / secs)} de los minutos y ${rot} jugadores superan los 10 minutos por partido.`;
+  const pcols = 'minmax(0,1fr) 34px 38px 34px 34px 50px 38px';
+  const tabJ = tbl(pcols, cell('') + ['MIN', 'PTS', 'REB', 'AST', 'TS%', 'VAL'].map((x) => cell(x, 'r')).join(''), 'h') +
+    top.map((p) => tbl(pcols, cell(p.n, 'e') + cell(fmt(p.mpg, 0), 'r') + cell(fmt(p.pts_g), 'r b') + cell(fmt(p.reb_g), 'r') + cell(fmt(p.ast_g), 'r') + cell(pct(p.ts), 'r') + cell(fmt(p.val_g), 'r'))).join('');
+
+  // tabla comparativa con la liga
+  const tcols = 'minmax(0,1fr) 52px 50px 46px';
+  const tabM = tbl(tcols, cell('') + cell('Valor', 'r') + cell('Liga', 'r') + cell('Puesto', 'r'), 'h') + rk.map((x) => {
+    const good = x.m.neutral ? '' : x.r <= Math.ceil(N / 3) ? 'rp-g' : x.r > N - Math.ceil(N / 3) ? 'rp-b' : '';
+    return tbl(tcols, cell(x.m.l, 'e') + cell(x.m.f(x.v), 'r b') + cell(x.m.f(x.avg), 'r') + `<span class="r"><span class="pill ${good}">${x.r}º</span></span>`);
+  }).join('');
+
+  // factores y tiro
+  const fac = (l, mine, theirs, f, hi) => { const w = hi ? mine > theirs : mine < theirs; return tbl('minmax(0,1fr) 64px 64px', cell(l) + cell(f(mine), 'r ' + (w ? 'b' : '')) + cell(f(theirs), 'r ' + (w ? '' : 'b'))); };
+  const factores = tbl('minmax(0,1fr) 64px 64px', cell('') + cell('Equipo', 'r') + cell('Rivales', 'r'), 'h') +
+    fac('Acierto de tiro (eFG%)', t.efg, t.oefg, pct, true) + fac('Pérdidas por posesión', t.tov, t.otov, pct, false) + fac('Rebote ofensivo', t.orb, t.oorb, pct, true) + fac('Libres por tiro de campo', t.ftr, t.oftr, pct, true);
+
+  let tiro = '<p>El gráfico de tiro de esta temporada se mostrará tras la próxima actualización automática.</p>';
+  let mapas = '';
+  const Z = zonesFor(t);
+  if (Z.n) {
+    const tot = (a) => a.reduce((x, y) => x + y.a, 0);
+    const zc = 'minmax(0,1fr) 50px 54px 50px';
+    const zt = (arr, title) => `<h4>${title}</h4>` + tbl(zc, cell('Zona') + cell('Tiros', 'r') + cell('Acierto', 'r') + cell('Liga', 'r'), 'h') + arr.map((z, k) => tbl(zc, cell(ZN[k], 'e') + cell(pct(100 * z.a / tot(arr)), 'r') + cell(z.a ? pct(100 * z.m / z.a) : '—', 'r b') + cell(pct(100 * Z.lg[k].m / Z.lg[k].a), 'r'))).join('');
+    tiro = `<p>Reparto de sus tiros de campo por zonas y acierto en cada una, frente a la media de la liga (clasificación aproximada a partir de la posición del tiro). Datos de ${Z.n} ${Z.n === 1 ? 'partido' : 'partidos'}.</p>${zt(Z.own, 'Sus tiros')}${zt(Z.opp, 'Tiros que permite')}`;
+    mapas = `<div class="courts"><div class="sec"><h3 style="font-size:15px">Sus tiros</h3>${courtSvg(Z.rowsOwn, 'Tiros de ' + t.short)}</div><div class="sec"><h3 style="font-size:15px">Rivales</h3>${courtSvg(Z.rowsOpp, 'Tiros que permite ' + t.short)}</div></div><p>● anotado · ✕ fallado.</p>`;
+  }
+
+  // claves
+  const tips = [];
+  weak.forEach((x) => { if (x.m.tw) tips.push(x.m.tw + ` (puesto ${x.r} de ${N})`); });
+  strong.forEach((x) => { if (x.m.ts) tips.push(x.m.ts + ` (puesto ${x.r} de ${N})`); });
+  const claves = tips.slice(0, 6);
+
+  const partidos = t.games.slice().sort((a, b) => a.j - b.j).map((g) => `<div class="gl">${vdChip(g.win)}<span>J${g.j} · ${g.home ? 'vs' : 'en'} ${esc(g.rival)}</span><strong>${esc(g.score)}</strong></div>`).join('');
+
+  const chips = `<div class="chips noprint" role="group" aria-label="Equipo">${teams.map((x) => chip('reT', x.name, x.short, x.name === t.name)).join('')}</div>`;
+  return `${chips}<article class="rp"><div class="rp-head"><div><h2>Informe · ${esc(t.short)}</h2><p class="rk">${esc(t.name)} · Tercera FEB, Grupo B-A · tras ${C.games.reduce((m, g) => Math.max(m, g.j), 0)} jornadas</p></div><button type="button" class="tg noprint" data-a="print">Imprimir / PDF</button></div>
+    <div class="rgrid">
+      <section class="box full"><h3>Resumen</h3><p>${esc(resumen)}</p><p>${esc(forma)}</p></section>
+      <section class="box"><h3>Puntos fuertes</h3>${strong.length ? `<ul>${strong.map((x) => li(x, 's')).join('')}</ul>` : '<p>Ninguna métrica entre las tres mejores del grupo.</p>'}</section>
+      <section class="box"><h3>Puntos débiles</h3>${weak.length ? `<ul>${weak.map((x) => li(x, 'w')).join('')}</ul>` : '<p>Ninguna métrica entre las tres peores del grupo.</p>'}</section>
+      <section class="box full"><h3>Claves para jugar contra ellos</h3>${claves.length ? `<ul>${claves.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p>Perfil equilibrado: no hay ninguna métrica claramente extrema.</p>'}<p class="rk">Deducidas de las estadísticas; con pocos partidos pueden cambiar.</p></section>
+      <section class="box"><h3>Comparación con la liga</h3>${tabM}</section>
+      <section class="box"><h3>Cuatro factores</h3>${factores}<h4>Forma reciente</h4>${last.map((g) => `<div class="gl">${vdChip(g.win)}<span>J${g.j} · ${g.home ? 'vs' : 'en'} ${esc(g.rival)}</span><strong>${esc(g.score)}</strong></div>`).join('')}</section>
+      <section class="box"><h3>Cuartos</h3><p>${esc(cuartos)}</p>${tbl('minmax(0,1fr) repeat(4,40px)', cell('Dif. media') + t.q.map((q) => qcell(q.d)).join(''))}${enPista ? `<p>${esc(enPista)}</p>` : ''}</section>
+      <section class="box"><h3>Jugadores</h3><p>${esc(jug)}</p>${tabJ}</section>
+      <section class="box"><h3>Tiro</h3>${tiro}</section>
+      <section class="box">${mapas || '<h3>Mapa de tiros</h3><p>Disponible tras la próxima actualización.</p>'}</section>
+      <section class="box full"><h3>Partidos</h3><div class="pgrid">${partidos}</div></section>
+    </div></article>`;
 }
 
 function viewGuide() {
@@ -516,13 +661,13 @@ function updatedLabel() {
   return d.toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-const TABS = [['eq', 'Equipos'], ['ju', 'Jugadores'], ['qu', 'Cuartos'], ['pa', 'Partidos'], ['gu', 'Guía']];
+const TABS = [['eq', 'Equipos'], ['ju', 'Jugadores'], ['qu', 'Cuartos'], ['pa', 'Partidos'], ['re', 'Informe'], ['gu', 'Guía']];
 function render() {
   document.getElementById('tabs').innerHTML = TABS.map(([id, l]) => `<button type="button" data-a="tab" data-v="${id}" ${S.tab === id ? 'aria-current="page"' : ''}>${l}</button>`).join('');
   const lastJ = C.games.reduce((m, g) => Math.max(m, g.j), 0);
   const lastD = C.games.reduce((m, g) => (g.d > m ? g.d : m), '').split('-');
   document.getElementById('head-right').textContent = 'J' + lastJ + ' · ' + parseInt(lastD[2], 10) + ' ' + MES[parseInt(lastD[1], 10) - 1];
-  const v = { eq: viewEq, ju: viewJu, qu: viewQ, pa: viewPa, gu: viewGuide }[S.tab];
+  const v = { eq: viewEq, ju: viewJu, qu: viewQ, pa: viewPa, re: viewRe, gu: viewGuide }[S.tab];
   document.getElementById('view').innerHTML = v();
 }
 
@@ -531,6 +676,7 @@ document.addEventListener('click', (e) => {
   if (!el || !C) return;
   const a = el.dataset.a, v = el.dataset.v;
   const y = window.scrollY;
+  if (a === 'print') { window.print(); return; }
   if (a === 'tab') { S.tab = v; window.scrollTo(0, 0); }
   else if (a === 'eqSort') S.eqSort = v;
   else if (a === 'eqSel') S.eqSel = S.eqSel === v ? null : v;
@@ -539,6 +685,7 @@ document.addEventListener('click', (e) => {
   else if (a === 'juMin') { S.juMin = !S.juMin; S.juLim = 25; }
   else if (a === 'juSel') S.juSel = S.juSel === v ? null : v;
   else if (a === 'more') S.juLim += 25;
+  else if (a === 'reT') S.reT = v;
   else if (a === 'qSel') S.qSel = S.qSel === v ? null : v;
   else if (a === 'paJ') { S.paJ = Number(v); S.paSel = null; }
   else if (a === 'shQ') S.shQ = Number(v);
