@@ -143,9 +143,26 @@ main{padding:14px 16px calc(24px + env(safe-area-inset-bottom));display:flex;fle
   .pgrid{grid-template-columns:repeat(3,minmax(0,1fr))}
   .rp h2{font-size:30px}
 }
+.shotcols{display:grid;gap:12px 24px;grid-template-columns:minmax(0,1fr)}
+.printonly{display:none}
+@media (min-width:600px) and (min-height:560px){.shotcols{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:420px){nav button{font-size:12px;padding:0 1px}}
+@page{size:A4;margin:12mm}
 @media print{
-  body{background:#fff;display:block}
+  .printonly{display:block;font-family:Roboto,sans-serif;font-size:20px;text-transform:uppercase;letter-spacing:.05em}
+  .shotpage{break-before:page;break-inside:avoid;page-break-before:always}
+  .shotpage .courts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .shotpage .shotcols{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .shotpage .court{max-width:none}
+  body{font-size:12px}
+  .tr{padding:2px 0;font-size:11.5px}
+  .box{padding:8px 10px;gap:5px}
+  .rgrid,.rp{gap:8px}
+  .rp p,.rp ul{font-size:12px;line-height:1.4}
+  .gl{padding:2px 0}
+  .chipvd{width:22px;height:22px;font-size:12px}
+  html,body,#app{background:#fff!important}
+  body{display:block}
   .top,.noprint,.chips{display:none!important}
   #app{display:block;max-width:none;background:#fff}
   main{padding:0}

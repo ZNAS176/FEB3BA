@@ -608,14 +608,14 @@ function viewRe() {
     fac('Acierto de tiro (eFG%)', t.efg, t.oefg, pct, true) + fac('Pérdidas por posesión', t.tov, t.otov, pct, false) + fac('Rebote ofensivo', t.orb, t.oorb, pct, true) + fac('Libres por tiro de campo', t.ftr, t.oftr, pct, true);
 
   let tiro = '<p>El gráfico de tiro de esta temporada se mostrará tras la próxima actualización automática.</p>';
-  let mapas = '';
   const Z = zonesFor(t);
   if (Z.n) {
     const tot = (a) => a.reduce((x, y) => x + y.a, 0);
     const zc = 'minmax(0,1fr) 50px 54px 50px';
-    const zt = (arr, title) => `<h4>${title}</h4>` + tbl(zc, cell('Zona') + cell('Tiros', 'r') + cell('Acierto', 'r') + cell('Liga', 'r'), 'h') + arr.map((z, k) => tbl(zc, cell(ZN[k], 'e') + cell(pct(100 * z.a / tot(arr)), 'r') + cell(z.a ? pct(100 * z.m / z.a) : '—', 'r b') + cell(pct(100 * Z.lg[k].m / Z.lg[k].a), 'r'))).join('');
-    tiro = `<p>Reparto de sus tiros de campo por zonas y acierto en cada una, frente a la media de la liga (clasificación aproximada a partir de la posición del tiro). Datos de ${Z.n} ${Z.n === 1 ? 'partido' : 'partidos'}.</p>${zt(Z.own, 'Sus tiros')}${zt(Z.opp, 'Tiros que permite')}`;
-    mapas = `<div class="courts"><div class="sec"><h3 style="font-size:15px">Sus tiros</h3>${courtSvg(Z.rowsOwn, 'Tiros de ' + t.short)}</div><div class="sec"><h3 style="font-size:15px">Rivales</h3>${courtSvg(Z.rowsOpp, 'Tiros que permite ' + t.short)}</div></div><p>● anotado · ✕ fallado.</p>`;
+    const zt = (arr, title) => `<div><h4>${title}</h4>` + tbl(zc, cell('Zona') + cell('Tiros', 'r') + cell('Acierto', 'r') + cell('Liga', 'r'), 'h') + arr.map((z, k) => tbl(zc, cell(ZN[k], 'e') + cell(pct(100 * z.a / tot(arr)), 'r') + cell(z.a ? pct(100 * z.m / z.a) : '—', 'r b') + cell(pct(100 * Z.lg[k].m / Z.lg[k].a), 'r'))).join('') + '</div>';
+    tiro = `<p>Reparto de los tiros de campo por zonas y acierto en cada una, frente a la media de la liga (clasificación aproximada a partir de la posición del tiro). Datos de ${Z.n} ${Z.n === 1 ? 'partido' : 'partidos'}.</p>
+      <div class="shotcols">${zt(Z.own, 'Sus tiros')}${zt(Z.opp, 'Tiros que permite')}</div>
+      <div class="courts"><div class="sec"><h3 style="font-size:15px">Sus tiros</h3>${courtSvg(Z.rowsOwn, 'Tiros de ' + t.short)}</div><div class="sec"><h3 style="font-size:15px">Rivales</h3>${courtSvg(Z.rowsOpp, 'Tiros que permite ' + t.short)}</div></div><p class="rk">● anotado · ✕ fallado. Todos los tiros se dibujan hacia el mismo aro.</p>`;
   }
 
   // claves
@@ -637,9 +637,8 @@ function viewRe() {
       <section class="box"><h3>Cuatro factores</h3>${factores}<h4>Forma reciente</h4>${last.map((g) => `<div class="gl">${vdChip(g.win)}<span>J${g.j} · ${g.home ? 'vs' : 'en'} ${esc(g.rival)}</span><strong>${esc(g.score)}</strong></div>`).join('')}</section>
       <section class="box"><h3>Cuartos</h3><p>${esc(cuartos)}</p>${tbl('minmax(0,1fr) repeat(4,40px)', cell('Dif. media') + t.q.map((q) => qcell(q.d)).join(''))}${enPista ? `<p>${esc(enPista)}</p>` : ''}</section>
       <section class="box"><h3>Jugadores</h3><p>${esc(jug)}</p>${tabJ}</section>
-      <section class="box"><h3>Tiro</h3>${tiro}</section>
-      <section class="box">${mapas || '<h3>Mapa de tiros</h3><p>Disponible tras la próxima actualización.</p>'}</section>
       <section class="box full"><h3>Partidos</h3><div class="pgrid">${partidos}</div></section>
+      <section class="box full shotpage"><h2 class="printonly">Informe · ${esc(t.short)} · Tiro</h2><h3>Información de tiro</h3>${tiro}</section>
     </div></article>`;
 }
 
