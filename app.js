@@ -43,7 +43,7 @@ function compute(G) {
     return { fgm: t[2] + t[4], fga, p3m: t[4], p3a: t[5], p2m: t[2], p2a: t[3], ftm: t[0], fta: t[1], orb: t[6], drb: t[7], ast: t[8], stl: t[9], tov: t[10], blk: t[11], pf: t[13], pts: s.pts, poss: fga - t[6] + t[10] + 0.44 * t[1], trb: t[6] + t[7] };
   };
   const T = {}, P = {}, games = [];
-  const teamOf = (name) => T[name] || (T[name] = { name, short: sh(name), gp: 0, w: 0, l: 0, gm: 0, m: blank(), o: blank(), games: [] });
+  const teamOf = (name) => T[name] || (T[name] = { name, short: sh(name), gp: 0, w: 0, l: 0, gm: 0, m: blank(), o: blank(), games: [], qg: [] });
 
   G.forEach((g) => {
     const gm = 40 + 5 * (g.q.length - 4);
@@ -55,6 +55,7 @@ function compute(G) {
       const t0 = teamOf(s.name), win = me.pts > op.pts;
       t0.gp += 1; t0.gm += gm; if (win) t0.w += 1; else t0.l += 1;
       KEYS.forEach((key) => { t0.m[key] += me[key]; t0.o[key] += op[key]; });
+      t0.qg.push({ j, home: k === 0, rival: sh(os.name), win, d: g.q.slice(0, 4).map((x) => x[k] - x[1 - k]), f: g.q.slice(0, 4).map((x) => x[k]), c: g.q.slice(0, 4).map((x) => x[1 - k]) });
       t0.games.push({ j, home: k === 0, rival: sh(os.name), opp: os.name, score: me.pts + '–' + op.pts, win, ort: 100 * me.pts / me.poss, drt: 100 * op.pts / op.poss });
       const used = me.fga + 0.44 * me.fta + me.tov;
       s.pl.forEach((p) => {
@@ -100,6 +101,21 @@ function compute(G) {
     t.otov = 100 * o.tov / o.poss;
     t.oorb = 100 * o.orb / (o.orb + m.drb);
     t.oftr = 100 * o.fta / o.fga;
+  });
+
+  Object.values(T).forEach((t) => {
+    const n = t.qg.length;
+    t.q = [0, 1, 2, 3].map((i) => {
+      const f = t.qg.reduce((x, g) => x + g.f[i], 0) / n, c = t.qg.reduce((x, g) => x + g.c[i], 0) / n;
+      const ds = t.qg.map((g) => g.d[i]), mean = (f - c);
+      const sd = Math.sqrt(ds.reduce((x, v) => x + (v - mean) * (v - mean), 0) / Math.max(1, n - 1));
+      return { f, c, d: mean, won: t.qg.filter((g) => g.d[i] > 0).length, lost: t.qg.filter((g) => g.d[i] < 0).length, se: sd / Math.sqrt(n) };
+    });
+    const avg = t.q.reduce((x, q) => x + q.d, 0) / 4;
+    t.q.forEach((q) => { q.bias = q.d - avg; });
+    t.qh1 = t.q[0].d + t.q[1].d; t.qh2 = t.q[2].d + t.q[3].d;
+    const ord = t.q.map((q, i) => i).sort((a, b) => t.q[a].bias - t.q[b].bias);
+    t.qworst = ord[0]; t.qbest = ord[3];
   });
 
   // Ajuste por rival (iterativo, con 3 partidos "medios" de regularización)
@@ -185,6 +201,7 @@ const GUIDE_TEAM = [
   ['Ajuste por rival', 'Ataque y defensa se corrigen según los rivales que ha tenido cada equipo, de forma iterativa. Con pocos partidos el resultado se acerca a la media para no exagerar, y se afinará según avance la temporada.'],
   ['Ritmo', 'Posesiones por 40 minutos, con la media de las dos canastas.'],
   ['eFG% y TS%', 'eFG% da 1,5 veces el valor al triple. TS% añade los tiros libres: puntos / (2 × (tiros + 0,44 × libres)).'],
+  ['Cuartos', 'Diferencia media de puntos de cada equipo en cada cuarto, y respecto a su propia media, para detectar un periodo débil o fuerte que se repite. Con pocos partidos puede ser ruido; el texto de cada equipo avisa cuando la diferencia aún es pequeña.'],
   ['Cuatro factores', 'Acierto (eFG%), pérdidas, rebote ofensivo y tiros libres. Se comparan con lo que consiguen los rivales contra ese equipo.']
 ];
 const GUIDE_PLAYER = [
@@ -197,7 +214,7 @@ const GUIDE_PLAYER = [
 ];
 
 /* ---------- vista ---------- */
-const S = { tab: 'eq', eqSort: 'anet', eqSel: null, juSort: 'val', juTeam: 'all', juMin: true, juSel: null, juLim: 25, paSel: null };
+const S = { qSel: null, tab: 'eq', eqSort: 'anet', eqSel: null, juSort: 'val', juTeam: 'all', juMin: true, juSel: null, juLim: 25, paSel: null };
 let DATA = null, C = null;
 
 const chip = (act, val, label, on) => `<button type="button" class="chip" data-a="${act}" data-v="${esc(val)}" aria-pressed="${on}">${esc(label)}</button>`;
@@ -335,6 +352,56 @@ function gameDetail(g) {
     ${box(hh)}${box(aa)}<a href="https://baloncestoenvivo.feb.es/partido/${g.i}" style="font-size:14px;font-weight:600">Acta completa en la FEB</a></div>`;
 }
 
+
+function qcol(v) {
+  if (v == null || !isFinite(v)) return '';
+  const a = Math.min(0.55, Math.abs(v) / 14);
+  return v >= 0 ? `background:rgba(31,78,120,${a.toFixed(2)})${a > 0.35 ? ';color:#fff' : ''}` : `background:rgba(255,156,27,${a.toFixed(2)})`;
+}
+const qcell = (v, d) => `<span class="r qc" style="${qcol(v)}">${esc(sgn(v, d == null ? 1 : d))}</span>`;
+const ord = (i) => (i + 1) + 'º';
+
+function viewQ() {
+  const teams = Object.values(C.T).sort((a, b) => b.anet - a.anet);
+  const cols = 'minmax(0,1fr) repeat(4,44px)';
+  let h = `<p class="hint">Diferencia media de puntos en cada cuarto (a favor − en contra). Azul: el equipo gana ese cuarto; naranja: lo pierde. Toca un equipo para ver el detalle y partido a partido.</p>`;
+  h += `<div class="card" style="padding:10px 12px">${tbl(cols, cell('') + [1, 2, 3, 4].map((i) => cell(i + 'º', 'r')).join(''), 'h')}`;
+  teams.forEach((t) => {
+    h += tbl(cols, `<button type="button" class="qb ${t.name === VEN ? 'v' : ''}" data-a="qSel" data-v="${esc(t.name)}">${esc(t.short)}</button>` + t.q.map((q) => qcell(q.d)).join(''));
+  });
+  h += '</div>';
+  h += '<div class="list">';
+  teams.forEach((t) => {
+    if (S.qSel !== t.name) return;
+    h += `<div class="card open ${t.name === VEN ? 'v' : ''}"><div class="det" style="border:0;padding-top:12px"><h3 style="font-family:Roboto,sans-serif;font-size:18px">${esc(t.short)}</h3>${qDetail(t)}</div></div>`;
+  });
+  return h + '</div>';
+}
+
+function qDetail(t) {
+  const n = t.qg.length, w = t.q[t.qworst], b = t.q[t.qbest];
+  const clear = (q) => Math.abs(q.bias) >= 2 * Math.max(q.se, 1.5);
+  let txt = `Con ${n} ${n === 1 ? 'partido' : 'partidos'}: su cuarto más fuerte es el ${ord(t.qbest)} (${sgn(b.d)} de media) y el más flojo el ${ord(t.qworst)} (${sgn(w.d)}). `;
+  txt += clear(w) || clear(b) ? 'La diferencia con su media es notable.' : 'La diferencia con su propia media todavía es pequeña frente a la variación entre partidos: puede ser casualidad.';
+  const cols = 'minmax(0,1fr) repeat(4,44px)';
+  const rows = [
+    ['A favor', t.q.map((q) => fmt(q.f)), false],
+    ['En contra', t.q.map((q) => fmt(q.c)), false],
+    ['Diferencia', t.q.map((q) => sgn(q.d)), true],
+    ['Respecto a su media', t.q.map((q) => sgn(q.bias)), true],
+    ['Cuartos ganados', t.q.map((q) => q.won + '/' + n), false],
+    ['Cuartos perdidos', t.q.map((q) => q.lost + '/' + n), false]
+  ];
+  const gcols = 'minmax(0,1fr) repeat(4,38px)';
+  return `<p class="hint">${esc(txt)}</p>
+    <div class="sec">${tbl(cols, cell('') + [1, 2, 3, 4].map((i) => cell(i + 'º', 'r')).join(''), 'h')}
+    ${rows.map(([l, vs, c]) => tbl(cols, cell(l) + vs.map((v, i) => c ? `<span class="r qc" style="${qcol(l === 'Diferencia' ? t.q[i].d : t.q[i].bias)}">${esc(v)}</span>` : cell(v, 'r')).join(''))).join('')}</div>
+    <div class="sec"><h3>1ª parte vs 2ª parte</h3>${tbl('minmax(0,1fr) 70px 70px', cell('') + cell('1ª parte', 'r') + cell('2ª parte', 'r'), 'h')}${tbl('minmax(0,1fr) 70px 70px', cell('Diferencia por partido') + qcell(t.qh1) + qcell(t.qh2))}</div>
+    <div class="sec"><h3>Partido a partido</h3>${tbl(gcols, cell('') + [1, 2, 3, 4].map((i) => cell(i + 'º', 'r')).join(''), 'h')}
+    ${t.qg.map((g) => tbl(gcols, cell('J' + g.j + ' ' + (g.home ? 'vs' : 'en') + ' ' + g.rival, 'e') + g.d.map((v) => qcell(v, 0)).join(''))).join('')}</div>
+    <p class="hint">Cuarto a cuarto ya se ve si hay un periodo débil que se repite. Saber con qué jugadores en pista ocurre requeriría el jugada a jugada, que el acta final no incluye.</p>`;
+}
+
 function viewGuide() {
   const lastJ = C.games.reduce((m, g) => Math.max(m, g.j), 0);
   const list = (arr) => arr.map(([t, d]) => `<div class="gd"><strong>${esc(t)}</strong><span>${esc(d)}</span></div>`).join('');
@@ -353,13 +420,13 @@ function updatedLabel() {
   return d.toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-const TABS = [['eq', 'Equipos'], ['ju', 'Jugadores'], ['pa', 'Partidos'], ['gu', 'Guía']];
+const TABS = [['eq', 'Equipos'], ['ju', 'Jugadores'], ['qu', 'Cuartos'], ['pa', 'Partidos'], ['gu', 'Guía']];
 function render() {
   document.getElementById('tabs').innerHTML = TABS.map(([id, l]) => `<button type="button" data-a="tab" data-v="${id}" ${S.tab === id ? 'aria-current="page"' : ''}>${l}</button>`).join('');
   const lastJ = C.games.reduce((m, g) => Math.max(m, g.j), 0);
   const lastD = C.games.reduce((m, g) => (g.d > m ? g.d : m), '').split('-');
   document.getElementById('head-right').textContent = 'J' + lastJ + ' · ' + parseInt(lastD[2], 10) + ' ' + MES[parseInt(lastD[1], 10) - 1];
-  const v = { eq: viewEq, ju: viewJu, pa: viewPa, gu: viewGuide }[S.tab];
+  const v = { eq: viewEq, ju: viewJu, qu: viewQ, pa: viewPa, gu: viewGuide }[S.tab];
   document.getElementById('view').innerHTML = v();
 }
 
@@ -376,6 +443,7 @@ document.addEventListener('click', (e) => {
   else if (a === 'juMin') { S.juMin = !S.juMin; S.juLim = 25; }
   else if (a === 'juSel') S.juSel = S.juSel === v ? null : v;
   else if (a === 'more') S.juLim += 25;
+  else if (a === 'qSel') S.qSel = S.qSel === v ? null : v;
   else if (a === 'paSel') S.paSel = S.paSel === Number(v) ? null : Number(v);
   render();
   if (a !== 'tab') window.scrollTo(0, y);

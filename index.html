@@ -31,8 +31,8 @@ h1,h2,h3{margin:0}
 .hero img{width:64px;height:64px;flex-shrink:0;border-radius:6px;background:#fff;object-fit:contain}
 .hero .t1{font-size:22px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;line-height:1.1}
 .hero .t2{font-size:13px;font-style:italic;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-top:4px}
-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:#fff;border-bottom:1px solid var(--bd)}
-nav button{min-height:48px;background:#fff;border:0;border-bottom:3px solid transparent;color:var(--mut);font-size:15px;font-weight:700;letter-spacing:.04em}
+nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#fff;border-bottom:1px solid var(--bd)}
+nav button{min-height:48px;background:#fff;border:0;border-bottom:3px solid transparent;color:var(--mut);font-size:13px;font-weight:700;letter-spacing:0;padding:0 2px}
 nav button[aria-current=page]{color:var(--red);border-bottom-color:var(--red)}
 main{padding:14px 16px calc(24px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px}
 .chips{display:flex;gap:6px;overflow-x:auto;margin:0 -16px;padding:0 16px;scrollbar-width:none}
@@ -78,6 +78,9 @@ main{padding:14px 16px calc(24px + env(safe-area-inset-bottom));display:flex;fle
 .gm .t{font-size:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gm .s{font-family:Roboto,sans-serif;font-size:26px;line-height:1;font-weight:500}
 .gm .w{font-weight:800}.gm .sw{font-weight:900}
+.qc{padding:3px 0;border-radius:4px;font-weight:700}
+.qb{background:transparent;border:0;padding:6px 0;min-height:36px;text-align:left;font-size:14px;font-weight:600;text-decoration:underline dotted #8A94A0;text-underline-offset:3px}
+.qb.v{color:var(--red)}
 .more{min-height:44px;background:#fff;border:1px solid var(--navy);border-radius:10px;font-weight:700;font-size:14px;color:var(--navy)}
 .empty{margin:0;padding:14px 16px;background:#fff;border:1px dashed #B8C4D0;border-radius:12px;font-size:14px;color:var(--mut)}
 .row2{display:flex;align-items:center;justify-content:space-between;gap:10px}
