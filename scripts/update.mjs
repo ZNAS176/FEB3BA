@@ -1,9 +1,11 @@
 // Actualiza data.json con las actas finales del grupo B-A de Tercera FEB.
 // Node 20+. Sin dependencias. Uso: node scripts/update.mjs
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { buildPbp } from './pbp.mjs';
 
 const FIRST = 2537025, FROM = 2537015, TO = 2537260; // rango de ids a explorar (7 partidos por jornada)
 const FILE = new URL('../data.json', import.meta.url);
+const PBF = new URL('../pbp.json', import.meta.url);
 const UA = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36', 'Accept-Language': 'es-ES,es;q=0.9' };
 
 const old = existsSync(FILE) ? JSON.parse(readFileSync(FILE, 'utf8')) : { games: [] };
@@ -15,10 +17,10 @@ async function token(id) {
   const m = (await r.text()).match(/id="_ctl0_token"[^>]*value="([^"]+)"/);
   return m && m[1];
 }
-async function api(id, tk) {
-  const r = await fetch(`https://intrafeb.feb.es/LiveStats.API/api/v1/BoxScore/${id}`, { headers: { ...UA, Authorization: `Bearer ${tk}`, Accept: 'application/json' } });
+async function api(id, tk, ep = 'BoxScore') {
+  const r = await fetch(`https://intrafeb.feb.es/LiveStats.API/api/v1/${ep}/${id}`, { headers: { ...UA, Authorization: `Bearer ${tk}`, Accept: 'application/json' } });
   if (r.status === 204 || r.status === 404) return null;
-  if (!r.ok) throw new Error(`API ${id}: HTTP ${r.status}`);
+  if (!r.ok) throw new Error(`API ${ep} ${id}: HTTP ${r.status}`);
   return r.json();
 }
 const num = (x) => Number(x) || 0;
@@ -85,8 +87,33 @@ await pool(ids, 6, async (id) => {
 
 if (fails > ids.length / 2) { console.error('Demasiados fallos: no se modifica data.json'); process.exit(1); }
 if (!have.size) { console.error('Sin datos'); process.exit(1); }
-if (!added) { console.log('Sin partidos nuevos.'); process.exit(0); }
 
 const games = [...have.values()].sort((a, b) => a.i - b.i);
-writeFileSync(FILE, JSON.stringify({ updated: new Date().toISOString(), games }));
-console.log(`data.json actualizado: ${games.length} partidos (+${added}).`);
+if (added) {
+  writeFileSync(FILE, JSON.stringify({ updated: new Date().toISOString(), games }));
+  console.log(`data.json actualizado: ${games.length} partidos (+${added}).`);
+} else console.log('Sin partidos nuevos.');
+
+// ---- Jugada a jugada: quintetos por cuarto (se calcula una sola vez por partido terminado) ----
+const pb = existsSync(PBF) ? JSON.parse(readFileSync(PBF, 'utf8')) : { games: {} };
+const need = games.map((g) => g.i).filter((id) => !pb.games[id]);
+console.log(`Jugada a jugada pendiente: ${need.length} partidos`);
+let pbAdded = 0, pbFails = 0;
+await pool(need, 4, async (id) => {
+  for (let tryN = 0; tryN < 2; tryN++) {
+    try {
+      let j;
+      try { j = await api(id, tk, 'KeyFacts'); } catch (e) { if (/401|403/.test(e.message) && tryN === 0) { tk = null; await ensure(); continue; } throw e; }
+      const r = j && buildPbp(j, id);
+      if (!r) { pbFails++; console.warn(`Sin jugada a jugada utilizable: ${id}`); return; }
+      const g = have.get(id);
+      const fin = [r.chk.pts[0], r.chk.pts[1]];
+      if (g && (fin[0] !== g.h.pts || fin[1] !== g.a.pts)) { pbFails++; console.warn(`Puntos del jugada a jugada no cuadran en ${id}: ${fin} vs ${g.h.pts}-${g.a.pts}`); return; }
+      delete r.chk; pb.games[id] = r; pbAdded++; return;
+    } catch (e) { if (tryN === 1) { pbFails++; console.warn(e.message); } }
+  }
+});
+if (pbAdded) {
+  writeFileSync(PBF, JSON.stringify({ updated: new Date().toISOString(), games: pb.games }));
+  console.log(`pbp.json actualizado (+${pbAdded}, ${pbFails} sin datos).`);
+}

@@ -159,6 +159,36 @@ function compute(G) {
   return { T, P, games };
 }
 
+
+/* ---------- jugada a jugada: quintetos por cuarto ---------- */
+function addPbp(C, PB) {
+  C.pbpN = 0;
+  Object.values(C.T).forEach((t) => { t.pq = [0, 1, 2, 3].map(() => ({ sec: 0, pf: 0, pa: 0 })); t.pg = 0; });
+  Object.values(C.P).forEach((p) => { p.pq = [0, 1, 2, 3].map(() => ({ sec: 0, pf: 0, pa: 0 })); });
+  const gm = new Map(C.games.map((g) => [g.i, g]));
+  Object.values((PB && PB.games) || {}).forEach((pg) => {
+    const g = gm.get(pg.i);
+    if (!g || !pg.r || !pg.k) return;
+    C.pbpN += 1;
+    const keys = [0, 1].map((s) => pg.r[s].map((n) => g.sides[s].name + '|' + norm(n)));
+    [0, 1].forEach((s) => { C.T[g.sides[s].name].pg += 1; });
+    pg.k.forEach((row) => {
+      const q = row[0] - 1;
+      if (q > 3) return; // las prórrogas no entran
+      [0, 1].forEach((s) => {
+        const t = C.T[g.sides[s].name], sec = row[3], pf = row[4 + 5 * s], pa = row[4 + 5 * (1 - s)];
+        t.pq[q].sec += sec; t.pq[q].pf += pf; t.pq[q].pa += pa;
+        keys[s].forEach((k, i) => {
+          if (!(row[1 + s] & (1 << i))) return;
+          const p = C.P[k];
+          if (!p) return;
+          p.pq[q].sec += sec; p.pq[q].pf += pf; p.pq[q].pa += pa;
+        });
+      });
+    });
+  });
+}
+
 /* ---------- definiciones de métricas ---------- */
 const EQ = [
   { id: 'anet', label: 'Dif. neta aj.', get: (t) => t.anet, f: (x) => sgn(x), desc: true, hint: 'Diferencia neta corregida por la fuerza de los rivales que ha tenido cada equipo.' },
@@ -202,6 +232,7 @@ const GUIDE_TEAM = [
   ['Ritmo', 'Posesiones por 40 minutos, con la media de las dos canastas.'],
   ['eFG% y TS%', 'eFG% da 1,5 veces el valor al triple. TS% añade los tiros libres: puntos / (2 × (tiros + 0,44 × libres)).'],
   ['Cuartos', 'Diferencia media de puntos de cada equipo en cada cuarto, y respecto a su propia media, para detectar un periodo débil o fuerte que se repite. Con pocos partidos puede ser ruido; el texto de cada equipo avisa cuando la diferencia aún es pequeña.'],
+  ['Quién está en pista', 'A partir del jugada a jugada de cada partido se reconstruye qué cinco jugadores había en pista en cada momento, y se compara el marcador del equipo con y sin cada jugador en cada cuarto. Las prórrogas no se incluyen.'],
   ['Cuatro factores', 'Acierto (eFG%), pérdidas, rebote ofensivo y tiros libres. Se comparan con lo que consiguen los rivales contra ese equipo.']
 ];
 const GUIDE_PLAYER = [
@@ -378,6 +409,35 @@ function viewQ() {
   return h + '</div>';
 }
 
+
+function pbpSection(t) {
+  if (!C.pbpN || !t.pg) return '<p class="hint">El jugada a jugada todavía no está descargado para este equipo. Aparecerá tras la próxima actualización automática.</p>';
+  const ng = t.pg, d10 = (pf, pa, sec) => (sec > 0 ? 10 * (pf - pa) / (sec / 60) : NaN);
+  const tot = (p) => p.pq.reduce((x, q) => x + q.sec, 0);
+  const pl = Object.values(C.P).filter((p) => p.teamFull === t.name && tot(p) > 0).sort((a, b) => tot(b) - tot(a)).slice(0, 9);
+  const mc = 'minmax(0,1fr) repeat(4,40px)';
+  const wq = t.qworst;
+  const cand = pl.map((p) => {
+    const q = p.pq[wq], tq = t.pq[wq];
+    const on = d10(q.pf, q.pa, q.sec), off = d10(tq.pf - q.pf, tq.pa - q.pa, tq.sec - q.sec);
+    return { p, on, off, gap: on - off, mins: q.sec / ng / 60 };
+  }).filter((c) => c.mins >= 2.5 && isFinite(c.gap)).sort((a, b) => b.gap - a.gap);
+  let txt = `Datos de ${ng} ${ng === 1 ? 'partido' : 'partidos'} con jugada a jugada. `;
+  if (cand.length >= 3) {
+    const best = cand.slice(0, 2), worst = cand[cand.length - 1];
+    const f = (c) => `${c.p.n} (${sgn(c.on, 0)} con él en pista, ${sgn(c.off, 0)} sin él)`;
+    txt += `En el ${ord(wq)} cuarto, su periodo más flojo, el equipo rinde mejor con ${best.map(f).join(' y ')}, y peor con ${f(worst)}. Cifras por cada 10 minutos de juego.`;
+  } else txt += 'Todavía hay pocos datos para comparar jugadores en su cuarto más flojo.';
+  txt += ' Es una correlación, no una causa: un jugador que comparte pista con los titulares, o con los suplentes rivales, parece mejor de lo que es.';
+  const head = (l) => tbl(mc, cell(l) + [1, 2, 3, 4].map((i) => cell(i + 'º', 'r')).join(''), 'h');
+  const minRows = pl.map((p) => tbl(mc, cell(p.n, 'e') + p.pq.map((q) => cell(fmt(q.sec / ng / 60), 'r')).join(''))).join('');
+  const dRows = pl.map((p) => tbl(mc, cell(p.n, 'e') + p.pq.map((q) => (q.sec >= 60 * ng ? qcell(d10(q.pf, q.pa, q.sec), 0) : cell('—', 'r'))).join(''))).join('');
+  const teamRow = tbl(mc, cell('Equipo', 'e b') + t.pq.map((q) => qcell(d10(q.pf, q.pa, q.sec), 0)).join(''));
+  return `<div class="sec"><h3>¿Influye quién está en pista?</h3><p>${esc(txt)}</p></div>
+    <div class="sec"><h3>Minutos por partido en cada cuarto</h3>${head('')}${minRows}</div>
+    <div class="sec"><h3>Dif. del equipo con él en pista (por 10 min)</h3>${head('')}${teamRow}${dRows}<p>Se muestra solo si el jugador ha sumado al menos un minuto por partido en ese cuarto.</p></div>`;
+}
+
 function qDetail(t) {
   const n = t.qg.length, w = t.q[t.qworst], b = t.q[t.qbest];
   const clear = (q) => Math.abs(q.bias) >= 2 * Math.max(q.se, 1.5);
@@ -399,7 +459,7 @@ function qDetail(t) {
     <div class="sec"><h3>1ª parte vs 2ª parte</h3>${tbl('minmax(0,1fr) 70px 70px', cell('') + cell('1ª parte', 'r') + cell('2ª parte', 'r'), 'h')}${tbl('minmax(0,1fr) 70px 70px', cell('Diferencia por partido') + qcell(t.qh1) + qcell(t.qh2))}</div>
     <div class="sec"><h3>Partido a partido</h3>${tbl(gcols, cell('') + [1, 2, 3, 4].map((i) => cell(i + 'º', 'r')).join(''), 'h')}
     ${t.qg.map((g) => tbl(gcols, cell('J' + g.j + ' ' + (g.home ? 'vs' : 'en') + ' ' + g.rival, 'e') + g.d.map((v) => qcell(v, 0)).join(''))).join('')}</div>
-    <p class="hint">Cuarto a cuarto ya se ve si hay un periodo débil que se repite. Saber con qué jugadores en pista ocurre requeriría el jugada a jugada, que el acta final no incluye.</p>`;
+    ${pbpSection(t)}`;
 }
 
 function viewGuide() {
@@ -449,9 +509,9 @@ document.addEventListener('click', (e) => {
   if (a !== 'tab') window.scrollTo(0, y);
 });
 
-fetch('data.json', { cache: 'no-cache' }).then((r) => r.json()).then((d) => {
-  DATA = d; C = compute(d.games); render();
-}).catch(() => {
+fetch('data.json', { cache: 'no-cache' }).then((r) => r.json()).then((d) => fetch('pbp.json', { cache: 'no-cache' })
+  .then((r) => (r.ok ? r.json() : { games: {} })).catch(() => ({ games: {} }))
+  .then((pb) => { DATA = d; C = compute(d.games); addPbp(C, pb); render(); })).catch(() => {
   document.getElementById('view').innerHTML = '<p class="empty">No se han podido cargar los datos. Comprueba la conexión e inténtalo de nuevo.</p>';
 });
 
