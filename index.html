@@ -166,15 +166,41 @@ main{padding:14px 16px calc(24px + env(safe-area-inset-bottom));display:flex;fle
 .cv.cwb{background:rgba(255,156,27,.30);font-weight:800}
 .cl{text-align:center;font-size:12.5px;color:var(--mut)}
 @media (min-width:600px) and (min-height:560px){.cmp-two{grid-template-columns:repeat(2,minmax(0,1fr))}.cmp-pick{max-width:640px}}
+
+.qgrid{display:flex;flex-direction:column;gap:12px}
+.qb.on{color:var(--navy);text-decoration:none;box-shadow:inset 3px 0 0 var(--navy);padding-left:8px}
+@media (min-width:600px) and (min-height:560px){
+  .tr{grid-template-columns:var(--cw,var(--c))}
+  .rgrid{display:block;column-count:2;column-gap:12px}
+  .rgrid>.box{break-inside:avoid;margin:0 0 12px;width:100%}
+  .rgrid>.box.full{column-span:all}
+  .det.g2{display:block;column-count:2;column-gap:28px}
+  .det.g2>*{break-inside:avoid;margin-bottom:16px}
+  .det.g2>.tiles,.det.g2>.wide{column-span:all}
+  .sub{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .qgrid.has{display:grid;grid-template-columns:minmax(440px,.9fr) 1.6fr;align-items:start}
+  .qgrid .qleft{position:sticky;top:12px}
+}
+@media (min-width:1000px) and (min-height:560px){
+  .rgrid{column-count:3}
+  .det.g2{column-count:3}
+  .qgrid.has .det.g2{column-count:2}
+}
+@media print{
+  .tr{grid-template-columns:var(--cw,var(--c))}
+  .rgrid{display:block;column-count:2;column-gap:8px}
+  .rgrid>.box{break-inside:avoid;margin:0 0 8px}
+  .rgrid>.box.full{column-span:all}
+}
 @page{size:A4;margin:12mm}
 @media print{
-  .printonly{display:block;font-family:Roboto,sans-serif;font-size:20px;text-transform:uppercase;letter-spacing:.05em}
-  .shotpage{break-before:page;break-inside:avoid;page-break-before:always}
+  .shotpage{break-inside:avoid;page-break-inside:avoid}
   .shotpage .courts{grid-template-columns:repeat(2,minmax(0,1fr))}
   .shotpage .shotcols{grid-template-columns:repeat(2,minmax(0,1fr))}
   .shotpage .court{max-width:none}
   body{font-size:12px}
-  .tr{padding:2px 0;font-size:11.5px}
+  .tr{padding:1px 0;font-size:11px}
+  .pill{padding:0 6px;font-size:11px}
   .box{padding:8px 10px;gap:5px}
   .rgrid,.rp{gap:8px}
   .rp p,.rp ul{font-size:12px;line-height:1.4}

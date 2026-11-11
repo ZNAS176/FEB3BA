@@ -245,11 +245,16 @@ const GUIDE_PLAYER = [
 ];
 
 /* ---------- vista ---------- */
-const S = { cmpA: VEN, cmpB: null, reT: VEN, paJ: null, shQ: 0, qSel: null, tab: 'eq', eqSort: 'anet', eqSel: null, juSort: 'val', juTeam: 'all', juMin: true, juSel: null, juLim: 25, paSel: null };
+const S = { qSel: undefined, cmpA: VEN, cmpB: null, reT: VEN, paJ: null, shQ: 0, tab: 'eq', eqSort: 'anet', eqSel: null, juSort: 'val', juTeam: 'all', juMin: true, juSel: null, juLim: 25, paSel: null };
 let DATA = null, C = null, SH = {};
 
 const chip = (act, val, label, on) => `<button type="button" class="chip" data-a="${act}" data-v="${esc(val)}" aria-pressed="${on}">${esc(label)}</button>`;
-const tbl = (cols, cells, cls) => `<div class="tr ${cls || ''}" style="--c:${cols}">${cells}</div>`;
+const wideCols = (c) => {
+  const w = (c.match(/(\d+)px/g) || []).map((x) => parseInt(x, 10)).reduce((x, y) => x + y, 0) / 44;
+  let first = true;
+  return c.replace(/(\d+)px/g, (m, n) => `minmax(${n}px,${(n / 44).toFixed(2)}fr)`).replace(/minmax\(0,1fr\)/, () => { if (!first) return 'minmax(0,1fr)'; first = false; return `minmax(0,${Math.max(1.5, w * 0.9).toFixed(2)}fr)`; });
+};
+const tbl = (cols, cells, cls) => `<div class="tr ${cls || ''}" style="--c:${cols};--cw:${wideCols(cols)}">${cells}</div>`;
 const cell = (v, cls) => `<span class="${cls || ''}">${esc(v)}</span>`;
 const tile = (l, v) => `<div class="tile"><b>${esc(v)}</b><i>${esc(l)}</i></div>`;
 const vdChip = (win) => `<span class="chipvd ${win ? '' : 'd'}">${win ? 'V' : 'D'}</span>`;
@@ -331,8 +336,7 @@ function playerDetail(p) {
     ['Tiro 2', pct(p.p2)], ['Tiro 3', pct(p.p3)], ['T. libres', pct(p.ft)], ['eFG%', pct(p.efg)],
     ['TS%', pct(p.ts)], ['USG%', pct(p.usg)], ['AST%', pct(p.astp)], ['REB%', pct(p.rebp)],
     ['REB of.%', pct(p.orbp)], ['REB def.%', pct(p.drbp)], ['ROB%', pct(p.stlp)], ['TAP%', pct(p.blkp)],
-    ['Pérdidas%', pct(p.tovp)], ['Game Score', fmt(p.gmsc_g)], ['+/− por 40', sgn(p.pm40)], ['Puntos x40', fmt(p.p40)],
-    ['Titular', p.st + '/' + p.gp], ['Min. totales', mmss(p.sec)]
+    ['Pérdidas%', pct(p.tovp)], ['Game Score', fmt(p.gmsc_g)], ['+/− por 40', sgn(p.pm40)], ['Titular', p.st + '/' + p.gp]
   ];
   const cols = 'minmax(0,1fr) 38px 32px 32px 32px 36px';
   return `<div class="det"><div class="tiles">${tiles.map(([l, v]) => tile(l, v)).join('')}</div>
@@ -435,20 +439,20 @@ const ord = (i) => (i + 1) + 'º';
 function viewQ() {
   const teams = Object.values(C.T).sort((a, b) => b.anet - a.anet);
   const cols = 'minmax(0,1fr) repeat(4,44px)';
-  let h = `<p class="hint">Diferencia media de puntos en cada cuarto (a favor − en contra). Azul: el equipo gana ese cuarto; naranja: lo pierde. Toca un equipo para ver el detalle y partido a partido.</p>`;
-  h += `<div class="card" style="padding:10px 12px">${tbl(cols, cell('') + [1, 2, 3, 4].map((i) => cell(i + 'º', 'r')).join(''), 'h')}`;
+  const wideMode = window.matchMedia && window.matchMedia('(min-width:600px) and (min-height:560px)').matches;
+  const sel = S.qSel === undefined ? (wideMode && C.T[VEN] ? VEN : null) : S.qSel;
+  let h = '<p class="hint">Diferencia media de puntos en cada cuarto (a favor − en contra). Azul: el equipo gana ese cuarto; naranja: lo pierde. Toca un equipo para ver el detalle y partido a partido.</p>';
+  h += `<div class="qgrid ${sel ? 'has' : ''}"><div class="card qleft" style="padding:10px 12px">${tbl(cols, cell('') + [1, 2, 3, 4].map((i) => cell(i + 'º', 'r')).join(''), 'h')}`;
   teams.forEach((t) => {
-    h += tbl(cols, `<button type="button" class="qb ${t.name === VEN ? 'v' : ''}" data-a="qSel" data-v="${esc(t.name)}">${esc(t.short)}</button>` + t.q.map((q) => qcell(q.d)).join(''));
+    h += tbl(cols, `<button type="button" class="qb ${t.name === VEN ? 'v' : ''} ${t.name === sel ? 'on' : ''}" data-a="qSel" data-v="${esc(t.name)}">${esc(t.short)}</button>` + t.q.map((q) => qcell(q.d)).join(''));
   });
   h += '</div>';
-  h += '<div class="list">';
   teams.forEach((t) => {
-    if (S.qSel !== t.name) return;
-    h += `<div class="card open ${t.name === VEN ? 'v' : ''}"><div class="det g2" style="border:0;padding-top:12px"><h3 class="wide" style="font-family:Roboto,sans-serif;font-size:18px">${esc(t.short)}</h3>${qDetail(t)}</div></div>`;
+    if (sel !== t.name) return;
+    h += `<div class="card open qright ${t.name === VEN ? 'v' : ''}"><div class="det g2" style="border:0;padding-top:12px"><h3 class="wide" style="font-family:Roboto,sans-serif;font-size:18px">${esc(t.short)}</h3>${qDetail(t)}</div></div>`;
   });
   return h + '</div>';
 }
-
 
 function pbpCalc(t) {
   const ng = t.pg, d10 = (pf, pa, sec) => (sec > 0 ? 10 * (pf - pa) / (sec / 60) : NaN);
