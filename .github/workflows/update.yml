@@ -7,10 +7,11 @@ on:
     - cron: '30 23 * * 6,0'   # sáb y dom ~01:30 Madrid
     - cron: '0 8 * * 0,1,2'   # dom, lun, mar mañana (actas tardías)
     - cron: '0 7 * * 3'       # miércoles (por si hay partidos aplazados)
+    - cron: '0 8 * * 4,5'     # jueves y viernes: cambios de horario del fin de semana
   workflow_dispatch:
   push:
     branches: [main]
-    paths-ignore: ['data.json', 'pbp.json', 'shots.json', 'README.md']
+    paths-ignore: ['data.json', 'pbp.json', 'shots.json', 'calendario.json', 'README.md']
 
 permissions:
   contents: write
@@ -33,10 +34,10 @@ jobs:
         run: node scripts/update.mjs
       - name: Guardar cambios
         run: |
-          if [ -n "$(git status --porcelain data.json pbp.json shots.json)" ]; then
+          if [ -n "$(git status --porcelain data.json pbp.json shots.json calendario.json)" ]; then
             git config user.name "feb3-ba-bot"
             git config user.email "actions@users.noreply.github.com"
-            git add data.json
+            git add data.json calendario.json 2>/dev/null || true
             if [ -f pbp.json ]; then git add pbp.json; fi
             if [ -f shots.json ]; then git add shots.json; fi
             git commit -m "Datos: actualización automática"
@@ -46,7 +47,7 @@ jobs:
       - name: Preparar sitio
         run: |
           mkdir _site
-          cp -r index.html app.js sw.js manifest.webmanifest data.json icons _site/
+          cp -r index.html app.js sw.js manifest.webmanifest data.json calendario.json icons _site/
           [ -f pbp.json ] && cp pbp.json _site/ || true
           [ -f shots.json ] && cp shots.json _site/ || true
       - uses: actions/upload-pages-artifact@v3

@@ -245,7 +245,7 @@ const GUIDE_PLAYER = [
 ];
 
 /* ---------- vista ---------- */
-const S = { qSel: undefined, cmpA: VEN, cmpB: null, reT: VEN, paJ: null, shQ: 0, tab: 'eq', eqSort: 'anet', eqSel: null, juSort: 'val', juTeam: 'all', juMin: true, juSel: null, juLim: 25, paSel: null };
+const S = { qSel: undefined, cmpA: VEN, cmpB: null, reT: VEN, paJ: null, shQ: 0, tab: 'eq', eqSort: 'anet', eqSel: null, juSort: 'val', juTeam: 'all', juMin: true, juSel: null, juLim: 25, paSel: null, blk: 'es', liT: VEN, liF: 'todos', liJ: null, vsM: 'anet' };
 let DATA = null, C = null, SH = {};
 
 const chip = (act, val, label, on) => `<button type="button" class="chip" data-a="${act}" data-v="${esc(val)}" aria-pressed="${on}">${esc(label)}</button>`;
@@ -603,7 +603,7 @@ function viewRe() {
   const tcols = 'minmax(0,1fr) 52px 50px 46px';
   const tabM = tbl(tcols, cell('') + cell('Valor', 'r') + cell('Liga', 'r') + cell('Puesto', 'r'), 'h') + rk.map((x) => {
     const good = x.m.neutral ? '' : x.r <= Math.ceil(N / 3) ? 'rp-g' : x.r > N - Math.ceil(N / 3) ? 'rp-b' : '';
-    return tbl(tcols, cell(x.m.l, 'e') + cell(x.m.f(x.v), 'r b') + cell(x.m.f(x.avg), 'r') + `<span class="r"><span class="pill ${good}">${x.r}º</span></span>`);
+    return tbl(tcols, cell(x.m.l) + cell(x.m.f(x.v), 'r b') + cell(x.m.f(x.avg), 'r') + `<span class="r"><span class="pill ${good}">${x.r}º</span></span>`);
   }).join('');
 
   // factores y tiro
@@ -742,15 +742,177 @@ function updatedLabel() {
   return d.toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-const TABS = [['eq', 'Equipos'], ['ju', 'Jugadores'], ['qu', 'Cuartos'], ['pa', 'Partidos'], ['re', 'Informe'], ['cm', 'Comparar'], ['gu', 'Guía']];
+// ===================== Bloque LIGA (seguimiento de la liga) =====================
+let CAL = null; // calendario.json
+const TZ = 'Europe/Madrid';
+const fd = (iso) => new Date(iso).toLocaleDateString('es-ES', { timeZone: TZ, weekday: 'short', day: 'numeric', month: 'short' });
+const fdl = (iso) => new Date(iso).toLocaleDateString('es-ES', { timeZone: TZ, weekday: 'long', day: 'numeric', month: 'long' });
+const hm = (iso) => new Date(iso).toLocaleTimeString('es-ES', { timeZone: TZ, hour: '2-digit', minute: '2-digit' });
+const GAMEMS = 150 * 60000;
+
+// Partidos del calendario con su resultado (si ya hay acta)
+function calList() {
+  const byId = new Map(C.games.map((g) => [g.i, g]));
+  const out = [];
+  if (CAL) CAL.jornadas.forEach((J) => J.matches.forEach((m) => {
+    const g = byId.get(m.p);
+    out.push({ ...m, j: J.j, t: new Date(m.ko).getTime(), g, hs: g ? g.sides[0].pts : null, as: g ? g.sides[1].pts : null });
+  }));
+  else C.games.forEach((g) => out.push({ p: g.i, j: g.j, ko: g.d + 'T12:00:00+01:00', t: new Date(g.d).getTime(), home: g.sides[0].name, away: g.sides[1].name, g, hs: g.sides[0].pts, as: g.sides[1].pts }));
+  return out;
+}
+
+// Clasificación: 2 puntos por victoria, 1 por derrota; desempate por el balance entre los empatados y luego por la diferencia total
+function standings() {
+  const rows = {};
+  const names = new Set(Object.keys(C.T));
+  if (CAL) CAL.jornadas.forEach((J) => J.matches.forEach((m) => { names.add(m.home); names.add(m.away); }));
+  names.forEach((n) => { rows[n] = { name: n, pj: 0, w: 0, l: 0, pf: 0, pc: 0, pt: 0, seq: [] }; });
+  const gs = C.games.slice().sort((a, b) => a.i - b.i);
+  gs.forEach((g) => {
+    [0, 1].forEach((k) => {
+      const me = g.sides[k], op = g.sides[1 - k], r = rows[me.name];
+      if (!r) return;
+      const win = me.pts > op.pts;
+      r.pj += 1; r.pf += me.pts; r.pc += op.pts; r.seq.push(win);
+      if (win) r.w += 1; else r.l += 1;
+    });
+  });
+  const arr = Object.values(rows);
+  arr.forEach((r) => { r.pt = 2 * r.w + r.l; r.dif = r.pf - r.pc; let n = 0; const last = r.seq[r.seq.length - 1]; for (let i = r.seq.length - 1; i >= 0 && r.seq[i] === last; i--) n++; r.streak = r.seq.length ? (last ? '+' : '−') + n : '—'; });
+  const h2h = (grp) => { const o = {}; grp.forEach((r) => { o[r.name] = { p: 0, d: 0 }; }); gs.forEach((g) => { const [a, b] = g.sides; if (o[a.name] && o[b.name]) { const w = a.pts > b.pts ? a : b, l = w === a ? b : a; o[w.name].p += 2; o[l.name].p += 1; o[a.name].d += a.pts - b.pts; o[b.name].d += b.pts - a.pts; } }); return o; };
+  arr.sort((a, b) => b.pt - a.pt);
+  let i = 0;
+  while (i < arr.length) {
+    let j = i; while (j + 1 < arr.length && arr[j + 1].pt === arr[i].pt) j++;
+    if (j > i) { const grp = arr.slice(i, j + 1), h = h2h(grp); grp.sort((a, b) => h[b.name].p - h[a.name].p || h[b.name].d - h[a.name].d || b.dif - a.dif || a.name.localeCompare(b.name)); arr.splice(i, grp.length, ...grp); }
+    i = j + 1;
+  }
+  arr.forEach((r, k) => { r.pos = k + 1; });
+  return arr;
+}
+
+function teamPicker() {
+  const names = standings().map((r) => r.name).sort((a, b) => (a === VEN ? -1 : b === VEN ? 1 : sh(a).localeCompare(sh(b), 'es')));
+  return `<div class="cmp-pick noprint" style="grid-template-columns:minmax(0,1fr)"><label><span class="lbl">Equipo</span><select data-a="liT" aria-label="Equipo">${names.map((n) => `<option value="${esc(n)}" ${n === S.liT ? 'selected' : ''}>${esc(sh(n))}</option>`).join('')}</select></label></div>`;
+}
+
+const rowMatch = (m, team) => {
+  const home = m.home === team, rival = home ? m.away : m.home, done = m.g != null;
+  const ours = home ? m.hs : m.as, theirs = home ? m.as : m.hs;
+  const res = done ? vdChip(ours > theirs) : '<span class="chipvd n">·</span>';
+  return `<div class="gl lrow">${res}<span><b>J${m.j} · ${home ? 'vs' : 'en'} ${esc(sh(rival))}</b><br><small class="mut">${esc(fd(m.ko))} · ${hm(m.ko)}${m.prev ? ` · <i class="chg">cambiado (antes ${esc(fd(m.prev))} ${hm(m.prev)})</i>` : ''}</small></span>
+    ${done ? `<button type="button" class="lgo" data-a="goGame" data-v="${m.p}"><strong>${ours}–${theirs}</strong></button>` : `<span class="tag ${home ? 'casa' : 'fuera'}">${home ? 'CASA' : 'FUERA'}</span>`}</div>`;
+};
+
+function viewLh() {
+  const team = C.T[S.liT] ? S.liT : VEN, st = standings(), me = st.find((r) => r.name === team);
+  const all = calList().filter((m) => m.home === team || m.away === team).sort((a, b) => a.t - b.t);
+  const now = Date.now();
+  const played = all.filter((m) => m.g), next = all.find((m) => !m.g && m.t + GAMEMS > now), last = played[played.length - 1];
+  let h = teamPicker();
+  h += `<div class="tiles" style="padding-top:0">${tile('Puesto', me ? me.pos + 'º' : '—')}${tile('V–D', me ? me.w + '–' + me.l : '—')}${tile('Pts a favor', me && me.pj ? fmt(me.pf / me.pj) : '—')}${tile('Pts en contra', me && me.pj ? fmt(me.pc / me.pj) : '—')}</div>`;
+  h += '<div class="rgrid">';
+  if (next) {
+    const home = next.home === team, rival = home ? next.away : next.home, diff = Math.max(0, next.t - now);
+    const d = Math.floor(diff / 864e5), hh = Math.floor(diff / 36e5) % 24;
+    h += `<section class="box nextbox"><h3>Próximo partido · J${next.j}</h3>
+      <div class="nx"><span class="tag ${home ? 'casa' : 'fuera'}">${home ? 'CASA' : 'FUERA'}</span><strong>${home ? 'vs' : 'en'} ${esc(sh(rival))}</strong></div>
+      <p class="hint" style="font-size:15px;color:var(--ink)"><b>${esc(fdl(next.ko))} · ${hm(next.ko)}</b></p>
+      <p class="hint">${diff < 0 || diff === 0 ? 'En juego ahora' : d > 0 ? `Faltan ${d} ${d === 1 ? 'día' : 'días'} y ${hh} h` : `Faltan ${hh} h`}</p>
+      ${next.prev ? `<p class="hint"><i class="chg">Horario cambiado · antes ${esc(fd(next.prev))} ${hm(next.prev)}</i></p>` : ''}
+      ${(() => { const r = st.find((x) => x.name === rival); return r ? `<p class="hint">Rival: ${r.pos}º · ${r.w}–${r.l}${r.pj ? ' · racha ' + r.streak : ''}</p>` : ''; })()}</section>`;
+  } else h += '<section class="box"><h3>Próximo partido</h3><p class="hint">No hay más partidos en el calendario.</p></section>';
+  if (last) h += `<section class="box"><h3>Último resultado</h3>${rowMatch(last, team)}</section>`;
+  const fut = all.filter((m) => !m.g && m !== next).slice(0, 4);
+  if (fut.length) h += `<section class="box"><h3>Siguientes</h3>${fut.map((m) => rowMatch(m, team)).join('')}</section>`;
+  const chg = (CAL ? calList() : []).filter((m) => m.prev && !m.g).sort((a, b) => a.t - b.t);
+  h += `<section class="box"><h3>Cambios de horario</h3>${chg.length ? chg.map((m) => `<div class="gl"><span><b>J${m.j} · ${esc(sh(m.home))} – ${esc(sh(m.away))}</b><br><small class="mut">Ahora ${esc(fd(m.ko))} ${hm(m.ko)} (antes ${esc(fd(m.prev))} ${hm(m.prev)})</small></span></div>`).join('') : '<p class="hint">Sin cambios por ahora. El calendario se revisa a diario en los días previos a cada jornada.</p>'}</section>`;
+  return h + '</div>';
+}
+
+function viewLc() {
+  const team = C.T[S.liT] ? S.liT : VEN;
+  const all = calList().filter((m) => m.home === team || m.away === team).sort((a, b) => a.t - b.t);
+  const list = all.filter((m) => S.liF === 'todos' || (S.liF === 'casa' ? m.home === team : m.away === team));
+  const f = [['todos', 'Todos'], ['casa', 'En casa'], ['fuera', 'Fuera']];
+  const next = all.find((m) => !m.g && m.t + GAMEMS > Date.now());
+  return teamPicker() + `<div class="chips" role="group" aria-label="Filtrar partidos">${f.map(([id, l]) => chip('liF', id, l, S.liF === id)).join('')}</div>
+    <div class="box lcal">${list.map((m) => `<div class="${next && next.p === m.p ? 'lnext' : ''}">${rowMatch(m, team)}</div>`).join('')}</div>`;
+}
+
+function viewLr() {
+  const cl = calList(), js = [...new Set(cl.map((m) => m.j))].sort((a, b) => a - b);
+  if (S.liJ == null) { const pl = cl.filter((m) => m.g).map((m) => m.j); S.liJ = pl.length ? Math.max(...pl) : js[0]; }
+  const cur = S.liJ;
+  const ms = cl.filter((m) => m.j === cur).sort((a, b) => a.t - b.t);
+  let h = `<div class="chips" role="group" aria-label="Jornada">${js.map((j) => chip('liJ', j, 'J' + j, j === cur)).join('')}</div>`;
+  h += `<p class="hint">Jornada ${cur}${ms[0] ? ' · fin de semana del ' + esc(fd(ms[0].ko)) : ''}. Toca un partido terminado para ver su estadística y el gráfico de tiro.</p><div class="list">`;
+  ms.forEach((m) => {
+    const hw = m.g && m.hs > m.as, aw = m.g && m.as > m.hs;
+    const inner = `<small>${esc(fd(m.ko))} · ${hm(m.ko)}${m.prev ? ' · horario cambiado' : ''}</small>
+      <div><span class="t ${hw ? 'w' : ''}">${esc(sh(m.home))}</span><span class="s ${hw ? 'sw' : ''}">${m.g ? m.hs : '–'}</span></div>
+      <div><span class="t ${aw ? 'w' : ''}">${esc(sh(m.away))}</span><span class="s ${aw ? 'sw' : ''}">${m.g ? m.as : '–'}</span></div>`;
+    h += `<div class="card ${m.home === VEN || m.away === VEN ? 'v' : ''}">${m.g ? `<button type="button" class="gm" data-a="goGame" data-v="${m.p}">${inner}</button>` : `<div class="gm">${inner}</div>`}</div>`;
+  });
+  return h + '</div>';
+}
+
+function viewLt() {
+  const st = standings(), played = st.some((r) => r.pj);
+  const cols = '26px minmax(0,1fr) 28px 28px 28px 42px 34px 38px';
+  let h = `<section class="box"><h3>Clasificación · Grupo B-A</h3>
+    ${tbl(cols, cell('#', 'r') + cell('Equipo') + cell('PJ', 'r') + cell('G', 'r') + cell('P', 'r') + cell('DIF', 'r') + cell('PT', 'r') + cell('R', 'r'), 'h')}
+    ${st.map((r) => tbl(cols, cell(r.pos, 'r') + cell(sh(r.name), 'e' + (r.name === VEN ? ' vn' : '')) + cell(r.pj, 'r') + cell(r.w, 'r') + cell(r.l, 'r') + cell(r.pj ? sgn(r.dif, 0) : '—', 'r') + cell(r.pt, 'r b') + cell(r.streak, 'r ' + (r.streak[0] === '+' ? 'sp' : r.streak[0] === '−' ? 'sn' : '')), r.name === VEN ? 'me' : '')).join('')}
+    <p class="hint">PT: 2 por victoria y 1 por derrota. DIF: puntos a favor menos en contra. R: racha (+ victorias, − derrotas seguidas). ${played ? 'Desempate: balance entre los equipos empatados y después diferencia total.' : ''} Calculada con las actas finales publicadas por la FEB.</p></section>`;
+  return h;
+}
+
+function viewLv() {
+  const all = Object.values(C.T), N = all.length;
+  const team = C.T[S.liT] ? S.liT : VEN, T = C.T[team];
+  const mean = (m) => all.reduce((s, t) => s + m.get(t), 0) / N;
+  const rk = CM.map((m) => ({ m, v: m.get(T), avg: mean(m), r: rankOf(T, m) }));
+  const good = (x) => (x.m.hi ? x.v > x.avg : x.v < x.avg);
+  const st = standings().find((r) => r.name === team);
+  const core = rk.filter((x) => !x.m.neutral);
+  const best = core.slice().sort((a, b) => a.r - b.r).slice(0, 3), worst = core.slice().sort((a, b) => b.r - a.r).slice(0, 3);
+  const cols = 'minmax(0,1fr) 58px 58px 50px';
+  const mid = tbl(cols, cell('') + cell('Equipo', 'r') + cell('Liga', 'r') + cell('Puesto', 'r'), 'h') + rk.map((x) => {
+    const cls = x.m.neutral ? '' : x.r <= 3 ? 'rp-g' : x.r > N - 3 ? 'rp-b' : '';
+    return tbl(cols, cell(x.m.l) + cell(x.m.f(x.v), 'r b') + cell(x.m.f(x.avg), 'r') + `<span class="r"><span class="pill ${cls}">${x.r}º</span></span>`);
+  }).join('');
+  const sel = CM.find((m) => m.id === S.vsM) || CM[0];
+  const rank = all.slice().sort((a, b) => (sel.hi ? sel.get(b) - sel.get(a) : sel.get(a) - sel.get(b)));
+  const vals = all.map((t) => sel.get(t)), lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+  const bar = (t) => { const w = 12 + 88 * (sel.hi ? (sel.get(t) - lo) / span : (hi - sel.get(t)) / span); return w.toFixed(0); };
+  const lst = (arr) => '<ul>' + arr.map((x) => `<li><b>${esc(x.m.l)}</b>: ${esc(x.m.f(x.v))} (liga ${esc(x.m.f(x.avg))}) <span class="rk">· puesto ${x.r} de ${N}</span></li>`).join('') + '</ul>';
+  return teamPicker() + `<div class="rgrid">
+    <section class="box full"><h3>${esc(sh(team))} frente a la liga</h3>
+      <p>${st ? `Ocupa el puesto ${st.pos} de ${N} en la clasificación (${st.w} victorias y ${st.l} derrotas). ` : ''}Se compara con la media de los ${N} equipos del grupo; el puesto va del 1º (mejor) al ${N}º. En azul, los 3 mejores puestos de la liga; en naranja, los 3 peores.</p>
+      <div class="pgrid"><div><h4 class="sech">Puntos fuertes</h4>${lst(best)}</div><div><h4 class="sech">A mejorar</h4>${lst(worst)}</div></div></section>
+    <section class="box"><h3>Equipo vs media de la liga</h3>${mid}</section>
+    <section class="box"><h3>Ranking de la liga</h3>
+      <div class="cmp-pick noprint" style="grid-template-columns:minmax(0,1fr)"><label><span class="lbl">Métrica</span><select data-a="vsM" aria-label="Métrica">${CM.map((m) => `<option value="${m.id}" ${m.id === sel.id ? 'selected' : ''}>${esc(m.l)}</option>`).join('')}</select></label></div>
+      ${rank.map((t, i) => `<div class="vsr ${t.name === team ? 'on' : ''}"><span class="n">${i + 1}</span><span class="nm2">${esc(t.short)}</span><span class="bw"><i style="width:${bar(t)}%"></i></span><span class="vv">${esc(sel.f(sel.get(t)))}</span></div>`).join('')}
+      <p class="hint">${sel.hi ? 'Más es mejor.' : 'Menos es mejor.'} ${sel.neutral ? 'Esta métrica describe un estilo de juego, no calidad.' : ''}</p></section></div>`;
+}
+
+const TABS_ES = [['eq', 'Equipos'], ['ju', 'Jugadores'], ['qu', 'Cuartos'], ['pa', 'Partidos'], ['re', 'Informe'], ['cm', 'Comparar'], ['gu', 'Guía']];
+const TABS_LI = [['lh', 'Mi equipo'], ['lc', 'Calendario'], ['lr', 'Resultados'], ['lt', 'Clasificación'], ['lv', 'Vs liga']];
+const BLOCKS = [['es', 'Estadística'], ['li', 'Liga']];
 function render() {
+  const TABS = S.blk === 'li' ? TABS_LI : TABS_ES;
+  if (!TABS.some(([id]) => id === S.tab)) S.tab = TABS[0][0];
+  document.getElementById('blk').innerHTML = BLOCKS.map(([id, l]) => `<button type="button" data-a="blk" data-v="${id}" ${S.blk === id ? 'aria-current="true"' : ''}>${l}</button>`).join('');
+  document.querySelector('.hero .t1').textContent = S.blk === 'li' ? 'Seguimiento de la liga' : 'Estadísticas';
   document.getElementById('tabs').innerHTML = TABS.map(([id, l]) => `<button type="button" data-a="tab" data-v="${id}" ${S.tab === id ? 'aria-current="page"' : ''}>${l}</button>`).join('');
   const lastJ = C.games.reduce((m, g) => Math.max(m, g.j), 0);
   const lastD = C.games.reduce((m, g) => (g.d > m ? g.d : m), '').split('-');
   document.getElementById('head-right').textContent = 'J' + lastJ + ' · ' + parseInt(lastD[2], 10) + ' ' + MES[parseInt(lastD[1], 10) - 1];
   const nv = document.getElementById('tabs'), cur = nv.querySelector('[aria-current]');
   if (cur && nv.scrollWidth > nv.clientWidth + 2) nv.scrollLeft = cur.offsetLeft - 24;
-  const v = { eq: viewEq, ju: viewJu, qu: viewQ, pa: viewPa, re: viewRe, cm: viewCmp, gu: viewGuide }[S.tab];
+  const v = { eq: viewEq, ju: viewJu, qu: viewQ, pa: viewPa, re: viewRe, cm: viewCmp, gu: viewGuide, lh: viewLh, lc: viewLc, lr: viewLr, lt: viewLt, lv: viewLv }[S.tab];
   document.getElementById('view').innerHTML = v();
 }
 
@@ -758,6 +920,8 @@ document.addEventListener('change', (e) => {
   const el = e.target.closest('select[data-a]');
   if (!el || !C) return;
   if (el.dataset.a === 'cmpA') { S.cmpA = el.value; if (S.cmpB === S.cmpA) S.cmpB = null; }
+  else if (el.dataset.a === 'liT') S.liT = el.value;
+  else if (el.dataset.a === 'vsM') S.vsM = el.value;
   else if (el.dataset.a === 'cmpB') { S.cmpB = el.value; if (S.cmpA === S.cmpB) S.cmpA = Object.keys(C.T).find((n) => n !== S.cmpB); }
   render();
 });
@@ -771,6 +935,10 @@ document.addEventListener('click', (e) => {
   if (a === 'cmpSwap') { const x = S.cmpA; S.cmpA = S.cmpB; S.cmpB = x; render(); return; }
   if (el.tagName === 'SELECT') return;
   if (a === 'tab') { S.tab = v; window.scrollTo(0, 0); }
+  else if (a === 'blk') { S.blk = v; S.tab = v === 'li' ? 'lh' : 'eq'; window.scrollTo(0, 0); }
+  else if (a === 'goGame') { const g = C.games.find((x) => x.i === Number(v)); if (g) { S.blk = 'es'; S.tab = 'pa'; S.paJ = g.j; S.paSel = g.i; } window.scrollTo(0, 0); }
+  else if (a === 'liF') S.liF = v;
+  else if (a === 'liJ') S.liJ = Number(v);
   else if (a === 'eqSort') S.eqSort = v;
   else if (a === 'eqSel') S.eqSel = S.eqSel === v ? null : v;
   else if (a === 'juSort') { S.juSort = v; S.juLim = 25; }
@@ -784,13 +952,13 @@ document.addEventListener('click', (e) => {
   else if (a === 'shQ') S.shQ = Number(v);
   else if (a === 'paSel') S.paSel = S.paSel === Number(v) ? null : Number(v);
   render();
-  if (a !== 'tab') window.scrollTo(0, y);
+  if (a !== 'tab' && a !== 'blk' && a !== 'goGame') window.scrollTo(0, y);
 });
 
 fetch('data.json', { cache: 'no-cache' }).then((r) => r.json()).then((d) => fetch('pbp.json', { cache: 'no-cache' })
   .then((r) => (r.ok ? r.json() : { games: {} })).catch(() => ({ games: {} }))
   .then((pb) => fetch('shots.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : { games: {} })).catch(() => ({ games: {} }))
-    .then((sj) => { SH = sj.games || {}; DATA = d; C = compute(d.games); addPbp(C, pb); render(); }))).catch(() => {
+    .then((sj) => fetch('calendario.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((cj) => { CAL = cj; SH = sj.games || {}; DATA = d; C = compute(d.games); addPbp(C, pb); render(); })))).catch(() => {
   document.getElementById('view').innerHTML = '<p class="empty">No se han podido cargar los datos. Comprueba la conexión e inténtalo de nuevo.</p>';
 });
 

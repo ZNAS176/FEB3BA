@@ -3,6 +3,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { buildPbp } from './pbp.mjs';
 import { buildShots } from './shots.mjs';
+import { updateCalendar } from './calendario.mjs';
 
 const FIRST = 2537025, FROM = 2537015, TO = 2537260; // rango de ids a explorar (7 partidos por jornada)
 const FILE = new URL('../data.json', import.meta.url);
@@ -146,3 +147,6 @@ if (shAdded) {
   writeFileSync(SHF, JSON.stringify({ updated: new Date().toISOString(), games: sh.games }));
   console.log(`shots.json actualizado (+${shAdded}, ${shFails} sin datos).`);
 }
+
+// ---- Calendario: cambios de fecha u hora de los próximos partidos (una vez al día) ----
+try { await updateCalendar((id) => api(id, tk)); } catch (e) { console.warn('Calendario:', e.message); }
