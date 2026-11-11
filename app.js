@@ -245,7 +245,7 @@ const GUIDE_PLAYER = [
 ];
 
 /* ---------- vista ---------- */
-const S = { qSel: undefined, cmpA: VEN, cmpB: null, reT: VEN, paJ: null, shQ: 0, tab: 'eq', eqSort: 'anet', eqSel: null, juSort: 'val', juTeam: 'all', juMin: true, juSel: null, juLim: 25, paSel: null, blk: 'es', liT: VEN, liF: 'todos', liJ: null, vsM: 'anet' };
+const S = { qSel: undefined, cmpA: VEN, cmpB: null, reT: VEN, paJ: null, shQ: 0, tab: 'eq', eqSort: 'anet', eqSel: null, juSort: 'val', juTeam: 'all', juMin: true, juSel: null, juLim: 25, paSel: null, blk: 'es', reG: null, liT: VEN, liF: 'todos', liJ: null, vsM: 'anet' };
 let DATA = null, C = null, SH = {};
 
 const chip = (act, val, label, on) => `<button type="button" class="chip" data-a="${act}" data-v="${esc(val)}" aria-pressed="${on}">${esc(label)}</button>`;
@@ -537,7 +537,7 @@ const rankOf = (t, m) => Object.values(C.T).slice().sort((a, b) => (m.hi ? m.get
 const zoneOf = (r) => { const d = Math.hypot(Math.min(r[3], 50) * 0.28 - 1.575, (r[4] - 50) * 0.15); return d < 2 ? 0 : d >= 6.4 ? 2 : 1; };
 const ZN = ['Cerca del aro', 'Media distancia', 'Triples'];
 
-function zonesFor(t) {
+function zonesFor(t, only) {
   const z = () => [0, 1, 2].map(() => ({ a: 0, m: 0 }));
   const own = z(), opp = z(), lg = z(), rowsOwn = [], rowsOpp = [];
   let n = 0;
@@ -546,7 +546,7 @@ function zonesFor(t) {
     if (!rows) return;
     rows.forEach((r) => { const k = zoneOf(r); lg[k].a += 1; lg[k].m += r[5]; });
     const s = g.sides.findIndex((x) => x.name === t.name);
-    if (s < 0) return;
+    if (s < 0 || (only != null && g.i !== only)) return;
     n += 1;
     rows.forEach((r) => {
       const k = zoneOf(r), tgt = r[0] === s ? own : opp;
@@ -612,12 +612,16 @@ function viewRe() {
     fac('Acierto de tiro (eFG%)', t.efg, t.oefg, pct, true) + fac('Pérdidas por posesión', t.tov, t.otov, pct, false) + fac('Rebote ofensivo', t.orb, t.oorb, pct, true) + fac('Libres por tiro de campo', t.ftr, t.oftr, pct, true);
 
   let tiro = '<p>El gráfico de tiro de esta temporada se mostrará tras la próxima actualización automática.</p>';
-  const Z = zonesFor(t);
+  const tg = C.games.filter((g) => g.sides.some((x) => x.name === t.name) && SH[g.i]).sort((a, b) => a.i - b.i);
+  if (S.reG != null && !tg.some((g) => g.i === S.reG)) S.reG = null;
+  const Z = zonesFor(t, S.reG);
+  const gsel = tg.length > 1 ? `<div class="cmp-pick noprint" style="grid-template-columns:minmax(0,1fr)"><label><span class="lbl">Partidos</span><select data-a="reG" aria-label="Partidos del informe de tiro"><option value="all" ${S.reG == null ? 'selected' : ''}>Todos los partidos (acumulado)</option>${tg.map((g) => { const k = g.sides.findIndex((x) => x.name === t.name), o = g.sides[1 - k]; return `<option value="${g.i}" ${S.reG === g.i ? 'selected' : ''}>J${g.j} · ${k === 0 ? 'vs' : 'en'} ${esc(sh(o.name))} (${g.sides[k].pts}–${o.pts})</option>`; }).join('')}</select></label></div>` : '';
+  const gone = S.reG != null ? (() => { const g = tg.find((x) => x.i === S.reG), k = g.sides.findIndex((x) => x.name === t.name); return `partido de la J${g.j} ${k === 0 ? 'contra' : 'en'} ${sh(g.sides[1 - k].name)}`; })() : null;
   if (Z.n) {
     const tot = (a) => a.reduce((x, y) => x + y.a, 0);
     const zc = 'minmax(0,1fr) 50px 54px 50px';
     const zt = (arr, title) => `<div><h4>${title}</h4>` + tbl(zc, cell('Zona') + cell('Tiros', 'r') + cell('Acierto', 'r') + cell('Liga', 'r'), 'h') + arr.map((z, k) => tbl(zc, cell(ZN[k], 'e') + cell(pct(100 * z.a / tot(arr)), 'r') + cell(z.a ? pct(100 * z.m / z.a) : '—', 'r b') + cell(pct(100 * Z.lg[k].m / Z.lg[k].a), 'r'))).join('') + '</div>';
-    tiro = `<p>Reparto de los tiros de campo por zonas y acierto en cada una, frente a la media de la liga (clasificación aproximada a partir de la posición del tiro). Datos de ${Z.n} ${Z.n === 1 ? 'partido' : 'partidos'}.</p>
+    tiro = `<p>Reparto de los tiros de campo por zonas y acierto en cada una, frente a la media de la liga (clasificación aproximada a partir de la posición del tiro). ${gone ? 'Datos del ' + esc(gone) + '.' : 'Datos de ' + Z.n + (Z.n === 1 ? ' partido' : ' partidos') + ' (acumulado).'}</p>${gsel}
       <div class="shotcols">${zt(Z.own, 'Sus tiros')}${zt(Z.opp, 'Tiros que permite')}</div>
       <div class="courts"><div class="sec"><h3 style="font-size:15px">Sus tiros</h3>${courtSvg(Z.rowsOwn, 'Tiros de ' + t.short)}</div><div class="sec"><h3 style="font-size:15px">Rivales</h3>${courtSvg(Z.rowsOpp, 'Tiros que permite ' + t.short)}</div></div><p class="rk">● anotado · ✕ fallado. Todos los tiros se dibujan hacia el mismo aro.</p>`;
   }
@@ -920,6 +924,7 @@ document.addEventListener('change', (e) => {
   const el = e.target.closest('select[data-a]');
   if (!el || !C) return;
   if (el.dataset.a === 'cmpA') { S.cmpA = el.value; if (S.cmpB === S.cmpA) S.cmpB = null; }
+  else if (el.dataset.a === 'reG') S.reG = el.value === 'all' ? null : Number(el.value);
   else if (el.dataset.a === 'liT') S.liT = el.value;
   else if (el.dataset.a === 'vsM') S.vsM = el.value;
   else if (el.dataset.a === 'cmpB') { S.cmpB = el.value; if (S.cmpA === S.cmpB) S.cmpA = Object.keys(C.T).find((n) => n !== S.cmpB); }
@@ -946,7 +951,7 @@ document.addEventListener('click', (e) => {
   else if (a === 'juMin') { S.juMin = !S.juMin; S.juLim = 25; }
   else if (a === 'juSel') S.juSel = S.juSel === v ? null : v;
   else if (a === 'more') S.juLim += 25;
-  else if (a === 'reT') S.reT = v;
+  else if (a === 'reT') { S.reT = v; S.reG = null; }
   else if (a === 'qSel') S.qSel = S.qSel === v ? null : v;
   else if (a === 'paJ') { S.paJ = Number(v); S.paSel = null; }
   else if (a === 'shQ') S.shQ = Number(v);
