@@ -245,7 +245,7 @@ const GUIDE_PLAYER = [
 ];
 
 /* ---------- vista ---------- */
-const S = { reT: VEN, paJ: null, shQ: 0, qSel: null, tab: 'eq', eqSort: 'anet', eqSel: null, juSort: 'val', juTeam: 'all', juMin: true, juSel: null, juLim: 25, paSel: null };
+const S = { cmpA: VEN, cmpB: null, reT: VEN, paJ: null, shQ: 0, qSel: null, tab: 'eq', eqSort: 'anet', eqSel: null, juSort: 'val', juTeam: 'all', juMin: true, juSel: null, juLim: 25, paSel: null };
 let DATA = null, C = null, SH = {};
 
 const chip = (act, val, label, on) => `<button type="button" class="chip" data-a="${act}" data-v="${esc(val)}" aria-pressed="${on}">${esc(label)}</button>`;
@@ -642,6 +642,84 @@ function viewRe() {
     </div></article>`;
 }
 
+/* ---------- comparar dos equipos ---------- */
+const CM = [{ id: 'anet', l: 'Dif. neta ajustada', get: (t) => t.anet, hi: true, f: (x) => sgn(x) }]
+  .concat(RM)
+  .concat([{ id: 'ppg', l: 'Puntos a favor', get: (t) => t.ppg, hi: true, f: (x) => fmt(x) }, { id: 'papg', l: 'Puntos en contra', get: (t) => t.papg, hi: false, f: (x) => fmt(x) }]);
+
+function viewCmp() {
+  const all = Object.values(C.T), N = all.length;
+  const names = all.slice().sort((a, b) => (a.name === VEN ? -1 : b.name === VEN ? 1 : a.short.localeCompare(b.short, 'es')));
+  if (!C.T[S.cmpA]) S.cmpA = VEN in C.T ? VEN : names[0].name;
+  if (!C.T[S.cmpB] || S.cmpB === S.cmpA) S.cmpB = all.slice().sort((a, b) => b.anet - a.anet).find((t) => t.name !== S.cmpA).name;
+  const A = C.T[S.cmpA], B = C.T[S.cmpB];
+  const opts = (sel) => names.map((t) => `<option value="${esc(t.name)}" ${t.name === sel ? 'selected' : ''}>${esc(t.short)}</option>`).join('');
+  const picker = `<div class="cmp-pick noprint"><label><span class="dot a"></span><span class="lbl">Equipo A</span><select data-a="cmpA" aria-label="Equipo A">${opts(A.name)}</select></label>
+    <button type="button" class="tg" data-a="cmpSwap" aria-label="Intercambiar equipos">⇄</button>
+    <label><span class="dot b"></span><span class="lbl">Equipo B</span><select data-a="cmpB" aria-label="Equipo B">${opts(B.name)}</select></label></div>`;
+
+  const rk = CM.map((m) => ({ m, a: m.get(A), b: m.get(B), ra: rankOf(A, m), rb: rankOf(B, m) }));
+  const win = (x) => (x.m.neutral || x.a === x.b ? 0 : (x.m.hi ? x.a > x.b : x.a < x.b) ? 1 : -1);
+  const rows = rk.map((x) => {
+    const w = win(x);
+    return tbl('minmax(0,1fr) minmax(0,1.5fr) minmax(0,1fr)',
+      `<span class="cv ${w > 0 ? 'cwa' : ''}">${esc(x.m.f(x.a))}<small>${x.ra}º</small></span><span class="cl">${esc(x.m.l)}</span><span class="cv ${w < 0 ? 'cwb' : ''}">${esc(x.m.f(x.b))}<small>${x.rb}º</small></span>`);
+  }).join('');
+  const na = rk.filter((x) => win(x) > 0 && Math.abs(x.ra - x.rb) >= 4).sort((p, q) => Math.abs(q.ra - q.rb) - Math.abs(p.ra - p.rb)).slice(0, 4);
+  const nb = rk.filter((x) => win(x) < 0 && Math.abs(x.ra - x.rb) >= 4).sort((p, q) => Math.abs(q.ra - q.rb) - Math.abs(p.ra - p.rb)).slice(0, 4);
+  const lst = (arr, who) => arr.length ? `<ul>${arr.map((x) => `<li><b>${esc(x.m.l)}</b>: ${esc(x.m.f(who === 'a' ? x.a : x.b))} <span class="rk">(puesto ${who === 'a' ? x.ra : x.rb} frente al ${who === 'a' ? x.rb : x.ra})</span></li>`).join('')}</ul>` : '<p>Sin ventajas claras (menos de 4 puestos de diferencia).</p>';
+
+  // enfrentamientos directos
+  const h2h = C.games.filter((g) => g.sides.some((s) => s.name === A.name) && g.sides.some((s) => s.name === B.name)).sort((p, q) => p.j - q.j);
+  const h2hTxt = h2h.length ? h2h.map((g) => { const [h, a] = g.sides; return `<div class="gl">${vdChip((h.name === A.name ? h.pts > a.pts : a.pts > h.pts))}<span>J${g.j} · ${esc(sh(h.name))} – ${esc(sh(a.name))}</span><strong>${h.pts}–${a.pts}</strong></div>`; }).join('') : '<p>Todavía no se han enfrentado esta temporada.</p>';
+
+  // estimación en pista neutral
+  const lg = all.reduce((x, t) => x + t.ao, 0) / N, poss = (A.pace + B.pace) / 2;
+  const pa = (A.ao + B.ad - lg) * poss / 100, pb = (B.ao + A.ad - lg) * poss / 100;
+  const est = `Con el ritmo medio de ambos (${fmt(poss)} posesiones), el ataque de ${A.short} frente a la defensa de ${B.short} da unos ${fmt(pa, 0)} puntos, y el de ${B.short} frente a la defensa de ${A.short}, unos ${fmt(pb, 0)}. Es una estimación para pista neutral, sin ventaja de campo, y con pocos partidos puede equivocarse en muchos puntos.`;
+
+  // cruces
+  const cx = (X, Y) => {
+    const f = (l, x, y, hi) => tbl('minmax(0,1fr) 62px 62px', cell(l) + cell(pct(x), 'r') + cell(pct(y), 'r ' + ''));
+    return `<h4>Ataque de ${esc(X.short)} frente a defensa de ${esc(Y.short)}</h4>` + tbl('minmax(0,1fr) 62px 62px', cell('') + cell('Ataque', 'r') + cell('Defensa', 'r'), 'h') +
+      f('Acierto (eFG%) / permitido', X.efg, Y.oefg) + f('Pérdidas / provocadas', X.tov, Y.otov) + f('Rebote ofensivo / def. rival', X.orb, 100 - Y.drb) + f('Libres por tiro / concedidos', X.ftr, Y.oftr);
+  };
+
+  // cuartos
+  const qrow = (t) => tbl('minmax(0,1fr) repeat(4,42px)', cell(t.short, 'e') + t.q.map((q) => qcell(q.d)).join(''));
+  const quarters = tbl('minmax(0,1fr) repeat(4,42px)', cell('Dif. media') + [1, 2, 3, 4].map((i) => cell(i + 'º', 'r')).join(''), 'h') + qrow(A) + qrow(B) +
+    `<p>${esc(A.short)}: más fuerte en el ${ord(A.qbest)}, más flojo en el ${ord(A.qworst)}. ${esc(B.short)}: más fuerte en el ${ord(B.qbest)}, más flojo en el ${ord(B.qworst)}.</p>`;
+
+  // jugadores
+  const topOf = (t) => Object.values(C.P).filter((p) => p.teamFull === t.name).sort((a, b) => b.val_g - a.val_g).slice(0, 5);
+  const pcols = 'minmax(0,1fr) 38px 32px 32px 38px';
+  const plist = (t) => `<h4>${esc(t.short)}</h4>` + tbl(pcols, cell('') + ['PTS', 'REB', 'AST', 'VAL'].map((x) => cell(x, 'r')).join(''), 'h') +
+    topOf(t).map((p) => tbl(pcols, cell(p.n, 'e') + cell(fmt(p.pts_g), 'r b') + cell(fmt(p.reb_g), 'r') + cell(fmt(p.ast_g), 'r') + cell(fmt(p.val_g), 'r'))).join('');
+
+  // tiro por zonas
+  const ZA = zonesFor(A), ZB = zonesFor(B);
+  let zonas = '<p>Los datos de tiro por zonas aparecerán tras la próxima actualización.</p>';
+  if (ZA.n && ZB.n) {
+    const tot = (a) => a.reduce((x, y) => x + y.a, 0), zc = 'minmax(0,1fr) 42px 48px 42px 48px 42px';
+    zonas = `<p>Cada equipo: porcentaje de sus tiros en cada zona y acierto, frente a la media de la liga (clasificación aproximada).</p>` +
+      tbl(zc, cell('') + cell('% A', 'r') + cell('Acier. A', 'r') + cell('% B', 'r') + cell('Acier. B', 'r') + cell('Liga', 'r'), 'h') +
+      ['Cerca aro', 'Media dist.', 'Triples'].map((n, k) => tbl(zc, cell(n, 'e') + cell(pct(100 * ZA.own[k].a / tot(ZA.own)), 'r') + cell(ZA.own[k].a ? pct(100 * ZA.own[k].m / ZA.own[k].a) : '—', 'r b') + cell(pct(100 * ZB.own[k].a / tot(ZB.own)), 'r') + cell(ZB.own[k].a ? pct(100 * ZB.own[k].m / ZB.own[k].a) : '—', 'r b') + cell(pct(100 * ZA.lg[k].m / ZA.lg[k].a), 'r'))).join('');
+  }
+
+  const head = (t, c) => `<div class="cmp-team ${c}"><span class="dot ${c}"></span><div><strong>${esc(t.short)}</strong><span class="rk">${t.w}–${t.l} · puesto ${rankOf(t, { get: (x) => x.anet, hi: true })} de ${N} · ${sgn(t.anet)}</span></div></div>`;
+  return `${picker}<article class="rp"><div class="rp-head"><div><h2>Comparación · ${esc(A.short)} – ${esc(B.short)}</h2><p class="rk">Tercera FEB, Grupo B-A · tras ${C.games.reduce((m, g) => Math.max(m, g.j), 0)} jornadas</p></div><button type="button" class="tg noprint" data-a="print">Imprimir / PDF</button></div>
+    <div class="cmp-heads">${head(A, 'a')}${head(B, 'b')}</div>
+    <div class="rgrid">
+      <section class="box full"><h3>Cara a cara</h3><div class="cmp-two"><div><h4>Ventajas de ${esc(A.short)}</h4>${lst(na, 'a')}</div><div><h4>Ventajas de ${esc(B.short)}</h4>${lst(nb, 'b')}</div></div><h4>Enfrentamientos directos</h4>${h2hTxt}</section>
+      <section class="box full"><h3>Estimación orientativa</h3><p>${esc(est)}</p></section>
+      <section class="box"><h3>Todas las métricas</h3>${rows}<p class="rk">Entre paréntesis pequeño, el puesto de cada equipo de ${N}. Sombreado: el que mejor está.</p></section>
+      <section class="box"><h3>Cruces de estilo</h3>${cx(A, B)}${cx(B, A)}</section>
+      <section class="box"><h3>Cuartos</h3>${quarters}</section>
+      <section class="box"><h3>Jugadores clave</h3>${plist(A)}${plist(B)}</section>
+      <section class="box full"><h3>Tiro por zonas</h3>${zonas}</section>
+    </div></article>`;
+}
+
 function viewGuide() {
   const lastJ = C.games.reduce((m, g) => Math.max(m, g.j), 0);
   const list = (arr) => arr.map(([t, d]) => `<div class="gd"><strong>${esc(t)}</strong><span>${esc(d)}</span></div>`).join('');
@@ -660,15 +738,25 @@ function updatedLabel() {
   return d.toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-const TABS = [['eq', 'Equipos'], ['ju', 'Jugadores'], ['qu', 'Cuartos'], ['pa', 'Partidos'], ['re', 'Informe'], ['gu', 'Guía']];
+const TABS = [['eq', 'Equipos'], ['ju', 'Jugadores'], ['qu', 'Cuartos'], ['pa', 'Partidos'], ['re', 'Informe'], ['cm', 'Comparar'], ['gu', 'Guía']];
 function render() {
   document.getElementById('tabs').innerHTML = TABS.map(([id, l]) => `<button type="button" data-a="tab" data-v="${id}" ${S.tab === id ? 'aria-current="page"' : ''}>${l}</button>`).join('');
   const lastJ = C.games.reduce((m, g) => Math.max(m, g.j), 0);
   const lastD = C.games.reduce((m, g) => (g.d > m ? g.d : m), '').split('-');
   document.getElementById('head-right').textContent = 'J' + lastJ + ' · ' + parseInt(lastD[2], 10) + ' ' + MES[parseInt(lastD[1], 10) - 1];
-  const v = { eq: viewEq, ju: viewJu, qu: viewQ, pa: viewPa, re: viewRe, gu: viewGuide }[S.tab];
+  const nv = document.getElementById('tabs'), cur = nv.querySelector('[aria-current]');
+  if (cur && nv.scrollWidth > nv.clientWidth + 2) nv.scrollLeft = cur.offsetLeft - 24;
+  const v = { eq: viewEq, ju: viewJu, qu: viewQ, pa: viewPa, re: viewRe, cm: viewCmp, gu: viewGuide }[S.tab];
   document.getElementById('view').innerHTML = v();
 }
+
+document.addEventListener('change', (e) => {
+  const el = e.target.closest('select[data-a]');
+  if (!el || !C) return;
+  if (el.dataset.a === 'cmpA') { S.cmpA = el.value; if (S.cmpB === S.cmpA) S.cmpB = null; }
+  else if (el.dataset.a === 'cmpB') { S.cmpB = el.value; if (S.cmpA === S.cmpB) S.cmpA = Object.keys(C.T).find((n) => n !== S.cmpB); }
+  render();
+});
 
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-a]');
@@ -676,6 +764,8 @@ document.addEventListener('click', (e) => {
   const a = el.dataset.a, v = el.dataset.v;
   const y = window.scrollY;
   if (a === 'print') { window.print(); return; }
+  if (a === 'cmpSwap') { const x = S.cmpA; S.cmpA = S.cmpB; S.cmpB = x; render(); return; }
+  if (el.tagName === 'SELECT') return;
   if (a === 'tab') { S.tab = v; window.scrollTo(0, 0); }
   else if (a === 'eqSort') S.eqSort = v;
   else if (a === 'eqSel') S.eqSel = S.eqSel === v ? null : v;
